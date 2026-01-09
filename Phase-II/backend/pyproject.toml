@@ -1,0 +1,62 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
+name = "todo-backend"
+version = "0.1.0"
+description = "Phase II Todo Full-Stack Web Application - Backend"
+authors = [{name = "Todo Team"}]
+requires-python = ">=3.11"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.104.0"
+uvicorn = {version = "^0.24.0", extras = ["standard"]}
+sqlmodel = "^0.0.14"
+psycopg2-binary = "^2.9.9"
+python-dotenv = "^1.0.0"
+pyjwt = "^2.8.1"
+bcrypt = "^4.1.1"
+email-validator = "^2.1.0"
+httpx = "^0.25.2"
+python-jose = {version = "^3.3.0", extras = ["cryptography"]}
+passlib = {version = "^1.7.4", extras = ["bcrypt"]}
+alembic = "^1.13.0"
+python-multipart = "^0.0.6"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-asyncio = "^0.21.1"
+pytest-cov = "^4.1.0"
+black = "^23.11.0"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
+mypy = "^1.7.0"
+ruff = "^0.1.8"
+
+[tool.poetry.scripts]
+dev = "uvicorn src.main:app --reload --host 0.0.0.0 --port 8000"
+prod = "uvicorn src.main:app --host 0.0.0.0 --port 8000"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
