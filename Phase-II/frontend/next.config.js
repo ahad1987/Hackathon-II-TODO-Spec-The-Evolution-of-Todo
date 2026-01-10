@@ -5,10 +5,10 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
 
-  // Environment variables
+  // Environment variables - use HF Spaces backend in production
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
-    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000',
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'production' ? 'https://ahad-00-todo-backend-api.hf.space' : 'http://localhost:8000'),
+    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://ahad-00-todo-backend-api.hf.space' : 'http://localhost:8000'),
   },
 
   // Rewrites for API proxy (optional, but helps with CORS)
