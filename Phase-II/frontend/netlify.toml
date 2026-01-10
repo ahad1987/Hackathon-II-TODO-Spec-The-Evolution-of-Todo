@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NEXT_PUBLIC_API_URL = "https://ahad-00-todo-backend-api.hf.space"
+  NEXT_PUBLIC_BACKEND_URL = "https://ahad-00-todo-backend-api.hf.space"
+  NODE_ENV = "production"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
