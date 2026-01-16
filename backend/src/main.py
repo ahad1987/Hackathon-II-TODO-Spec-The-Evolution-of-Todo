@@ -126,6 +126,8 @@ async def root():
             "redoc": "/redoc",
             "auth": "/api/v1/auth",
             "tasks": "/api/v1/tasks",
+            "chat_imported": str(chat is not None),
+            "chat_endpoint": "/api/{user_id}/chat" if chat else None,
         },
     }
 
