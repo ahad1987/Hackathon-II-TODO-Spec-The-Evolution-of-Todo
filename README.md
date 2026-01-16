@@ -1,14 +1,17 @@
 ---
 title: Taskflow Ai Backend
-emoji: 📚
-colorFrom: gray
-colorTo: blue
+emoji: 🚀
+colorFrom: blue
+colorTo: green
 sdk: docker
 pinned: false
 ---
 
 # TaskFlow AI Backend
 
-Todo API with AI Chatbot support.
+API with AI Chatbot - Rebuild triggered at $(date)
 
-Rebuild timestamp: Fri Jan 16 2026 21:15:00
+Endpoints:
+- POST /api/v1/chat - AI Chat
+- POST /api/v1/auth/* - Authentication  
+- GET/POST /api/v1/tasks - Task management
