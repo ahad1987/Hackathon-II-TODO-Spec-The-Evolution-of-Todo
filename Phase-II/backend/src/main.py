@@ -84,14 +84,12 @@ app.add_middleware(
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    """
-    Health check endpoint for load balancers.
-    Returns 200 OK if the service is running.
-    """
+    """Health check endpoint."""
     return {
         "status": "healthy",
         "version": settings.API_VERSION,
         "environment": settings.ENVIRONMENT,
+        "chat_registered": getattr(app.state, "chat_registered", False),
     }
 
 
@@ -136,12 +134,14 @@ from src.api import auth, tasks
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
 
-# Import chat router with error handling to expose any import issues
+# Import chat router with error handling
 try:
-    from src.chatbot.api.routes import chat
-    app.include_router(chat.router, tags=["Chat"])
-    logger.info("Chat router registered successfully")
+    from src.chatbot.api.routes.chat import router as chat_router
+    app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
+    app.state.chat_registered = True
+    logger.info("Chat router registered at /api/v1/chat")
 except Exception as e:
+    app.state.chat_registered = False
     logger.error(f"Failed to import chat router: {e}", exc_info=True)
 
 

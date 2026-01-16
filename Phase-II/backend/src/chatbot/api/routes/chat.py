@@ -1,7 +1,7 @@
 """
-Chat endpoint for Phase-III AI Chatbot.
+Chat endpoint for AI Chatbot.
 
-Endpoint: POST /api/{user_id}/chat
+Endpoint: POST /api/v1/chat
 
 Request:
 {
@@ -17,46 +17,23 @@ Response:
   "status": "success" | "error"
 }
 
-Error responses:
-- 401 Unauthorized: Missing or invalid token
-- 403 Forbidden: user_id mismatch
-- 422 Unprocessable Entity: Validation error
-- 500 Internal Server Error: Database or unexpected error
-
-Guarantees:
-- Stateless: No session state retained after request
-- User-scoped: All operations for authenticated user only
-- Persistent: Conversation history saved to database
-- Safe: All inputs validated, errors handled gracefully
-
-Critical flow (STATELESS):
-1. Receive request with JWT token + user_id + message + optional conversation_id
-2. Authenticate: validate JWT token, extract user_id
-3. Authorize: verify URL user_id matches token user_id
-4. Load: fetch existing conversation (or create new)
-5. Load history: fetch all messages for conversation from DB
-6. Execute: call agent with history + new message
-7. Persist: save user message and assistant response to DB
-8. Release: clear all in-memory state (function returns)
-9. Return: send response to client
-10. ← Server memory cleared, ready for next request
+User ID is extracted from JWT token (via middleware) - NOT from URL.
 """
 
 import logging
 from typing import Optional, List
-from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.chatbot.api.dependencies import get_current_user, verify_user_ownership
+from src.chatbot.api.dependencies import get_current_user
 from src.chatbot.services import ConversationService, AgentService
-from src.chatbot.models import MessageCreate
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["chat"])
+# No prefix here - prefix added in main.py as /api/v1
+router = APIRouter(tags=["Chat"])
 
 
 # Request/Response models
@@ -87,58 +64,19 @@ class ChatResponse(BaseModel):
     )
 
 
-@router.post("/{user_id}/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def chat(
-    user_id: str,
     request: ChatRequest,
     session: AsyncSession = Depends(get_session),
-    authenticated_user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user)
 ) -> ChatResponse:
     """
-    Process a chat message.
+    Process a chat message. User ID extracted from JWT token.
 
-    STATELESS GUARANTEE:
-    This endpoint is completely stateless:
-    - No session state stored on server
-    - No connection affinity required
-    - Can be deployed on multiple servers
-    - Server restart = zero data loss
-    - Horizontal scaling enabled
-
-    Flow:
-    1. Authenticate user via JWT token
-    2. Load conversation (or create new)
-    3. Load conversation history from database
-    4. Execute agent with context
-    5. Save response to database
-    6. Return response to user
-    7. Clear all in-memory state
-
-    Args:
-        user_id: User ID from URL path
-        request: Chat request (conversation_id, message)
-        session: Database session (auto-injected)
-        authenticated_user_id: User ID from JWT token (auto-injected)
-
-    Returns:
-        ChatResponse with conversation_id, assistant response, tool calls, status
-
-    Raises:
-        HTTPException: 401 (auth error), 403 (forbidden), 422 (validation), 500 (server error)
-
-    User isolation:
-        - Verified at two levels:
-          1. JWT token validation (authenticated_user_id)
-          2. URL path verification (user_id == authenticated_user_id)
-        - All database queries filtered by user_id
-        - User cannot access other users' conversations
+    Endpoint: POST /api/v1/chat
     """
     try:
-        # STEP 1: AUTHENTICATE & AUTHORIZE
-        logger.info(f"Chat request from user {authenticated_user_id}")
-
-        # Verify URL user_id matches authenticated user
-        verify_user_ownership(authenticated_user_id, user_id)
+        logger.info(f"Chat request from user {user_id}")
 
         # STEP 2: LOAD OR CREATE CONVERSATION
         conversation_service = ConversationService()
