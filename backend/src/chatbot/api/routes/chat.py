@@ -1,6 +1,8 @@
 """
 Chat endpoint for Phase-III AI Chatbot.
-Endpoint: POST /api/chat (user_id from JWT token)
+Supports both:
+- POST /api/chat (preferred, user_id from JWT)
+- POST /api/{user_id}/chat (legacy, for frontend compatibility)
 """
 
 import logging
@@ -19,56 +21,42 @@ router = APIRouter(tags=["chat"])
 
 
 class ChatRequest(BaseModel):
-    """Chat request model."""
     conversation_id: Optional[str] = Field(None, description="Existing conversation ID")
     message: str = Field(..., min_length=1, max_length=5000, description="User message")
 
 
 class ChatResponse(BaseModel):
-    """Chat response model."""
-    conversation_id: str = Field(..., description="Conversation ID")
-    response: str = Field(..., description="Assistant response")
-    tool_calls: List[str] = Field(default_factory=list, description="Tools called")
-    status: str = Field(..., description="Response status")
+    conversation_id: str
+    response: str
+    tool_calls: List[str] = Field(default_factory=list)
+    status: str
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat(
-    request: ChatRequest,
-    session: AsyncSession = Depends(get_session),
-    user_id: str = Depends(get_current_user)
-) -> ChatResponse:
-    """Send a message to the AI chatbot. User ID extracted from JWT token."""
-    logger.info(f"Chat request from authenticated user: {user_id}")
+async def process_chat(user_id: str, request: ChatRequest, session: AsyncSession) -> ChatResponse:
+    """Common chat processing logic."""
+    logger.info(f"Processing chat for user: {user_id}")
     
     conversation_service = ConversationService()
     agent_service = AgentService()
     
     try:
-        # Get or create conversation
         if request.conversation_id:
-            conversation = await conversation_service.get_conversation(
-                session, request.conversation_id, user_id
-            )
+            conversation = await conversation_service.get_conversation(session, request.conversation_id, user_id)
             if not conversation:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+                raise HTTPException(status_code=404, detail="Conversation not found")
         else:
             conversation = await conversation_service.create_conversation(session, user_id)
         
-        # Get conversation history
         history = await conversation_service.get_conversation_history(session, conversation.id, user_id)
         history_dicts = [{"role": m.role, "content": m.content} for m in history]
         
-        # Save user message
         await conversation_service.append_message(session, conversation.id, user_id, "user", request.message)
         
-        # Process with agent
         result = await agent_service.process_message(session, user_id, request.message, history_dicts)
         
-        # Save assistant response
         tool_calls_str = ",".join(result.get("tool_calls", []))
         await conversation_service.append_message(
-            session, conversation.id, user_id, "assistant", 
+            session, conversation.id, user_id, "assistant",
             result["response"], tool_calls_str if tool_calls_str else None
         )
         
@@ -78,7 +66,6 @@ async def chat(
             tool_calls=result.get("tool_calls", []),
             status=result.get("status", "success")
         )
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -89,3 +76,27 @@ async def chat(
             tool_calls=[],
             status="error"
         )
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat_simple(
+    request: ChatRequest,
+    session: AsyncSession = Depends(get_session),
+    user_id: str = Depends(get_current_user)
+) -> ChatResponse:
+    """Chat endpoint - user_id from JWT token."""
+    return await process_chat(user_id, request, session)
+
+
+@router.post("/{user_id}/chat", response_model=ChatResponse)
+async def chat_with_user_id(
+    user_id: str,
+    request: ChatRequest,
+    session: AsyncSession = Depends(get_session),
+    authenticated_user_id: str = Depends(get_current_user)
+) -> ChatResponse:
+    """Chat endpoint with user_id in URL (legacy compatibility)."""
+    # Verify the URL user_id matches the authenticated user
+    if user_id != authenticated_user_id:
+        raise HTTPException(status_code=403, detail="User ID mismatch")
+    return await process_chat(user_id, request, session)
