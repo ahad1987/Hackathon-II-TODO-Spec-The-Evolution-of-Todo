@@ -82,13 +82,13 @@ export default function Home() {
 
           {/* Subheading */}
           <p className="text-xl text-slate-600 mb-8 max-w-2xl mx-auto">
-            TaskFlow is your modern productivity companion. Create, organize, and complete tasks with ease. Stay focused on what matters most.
+            Now powered by AI — manage your tasks through natural conversation. TaskFlow helps you create, organize, and complete tasks effortlessly. Stay focused on what matters most.
           </p>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <Link href="/signup" className="btn-primary text-lg px-8 py-3">
-              Start Free Today
+              Start Free with AI
             </Link>
             <Link
               href="/login"

@@ -25,7 +25,22 @@ export default function TaskList({ onTasksUpdate, onTasksLoaded }: TaskListProps
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Fetch tasks on mount
     fetchTasks();
+
+    // Refetch tasks when page becomes visible (user switches back from another tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchTasks();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup listener on unmount
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const fetchTasks = async () => {

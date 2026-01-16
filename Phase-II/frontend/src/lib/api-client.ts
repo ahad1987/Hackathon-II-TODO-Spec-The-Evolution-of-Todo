@@ -117,13 +117,16 @@ export const setTokenInCookie = (token: string): void => {
  */
 export const getTokenFromCookie = (): string | null => {
   // Extract JWT from auth_token cookie
+  console.log('[API] All cookies:', document.cookie);
   const cookies = document.cookie.split(';');
   for (const cookie of cookies) {
     const [name, value] = cookie.trim().split('=');
     if (name === 'auth_token' && value) {
+      console.log('[API] Found auth_token in cookie');
       return decodeURIComponent(value);
     }
   }
+  console.log('[API] auth_token not found in cookies');
   return null;
 };
 
@@ -152,9 +155,14 @@ export const authApi = {
   login: async (email: string, password: string) => {
     const client = getApiClient();
     const response = await client.post('/api/v1/auth/login', { email, password });
+    console.log('[API] Login response:', response.data);
     // Store JWT token in cookie
     if (response.data.token) {
+      console.log('[API] Saving token to cookie');
       setTokenInCookie(response.data.token);
+    } else {
+      console.log('[API] No token in response.data.token. Checking other locations...');
+      console.log('[API] response.data keys:', Object.keys(response.data));
     }
     return response.data;
   },

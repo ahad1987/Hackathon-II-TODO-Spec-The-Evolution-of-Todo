@@ -49,8 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkAuth = async () => {
       try {
         const token = getTokenFromCookie();
+        console.log('[Auth] Token from cookie:', token ? 'YES' : 'NO');
+
         if (!token) {
           // No token, user is not authenticated
+          console.log('[Auth] No token found');
           setUser(null);
           setIsAuthenticated(false);
           setIsLoading(false);
@@ -59,19 +62,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Token exists, try to fetch current user
         try {
+          console.log('[Auth] Fetching user data...');
           const userData = await authApi.getMe();
+          console.log('[Auth] User data received:', userData);
           setUser(userData);
           setIsAuthenticated(true);
         } catch (err: any) {
           // Token might be invalid or expired
+          console.error('[Auth] Error fetching user:', err);
           if (err?.statusCode === 401 || err?.statusCode === 403) {
             // Token is invalid, clear it
+            console.log('[Auth] Token invalid (401/403), clearing');
             clearAuthCookie();
             setUser(null);
             setIsAuthenticated(false);
           } else {
             // Some other error, but still mark as not loading
-            console.error('Auth check error:', err);
+            console.error('[Auth] Check error:', err);
             setUser(null);
             setIsAuthenticated(false);
           }

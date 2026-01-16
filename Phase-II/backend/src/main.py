@@ -132,9 +132,11 @@ async def root():
 
 # Import and include API routes
 from src.api import auth, tasks
+from src.chatbot.api.routes import chat
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
+app.include_router(chat.router, tags=["Chat"])
 
 
 if __name__ == "__main__":
