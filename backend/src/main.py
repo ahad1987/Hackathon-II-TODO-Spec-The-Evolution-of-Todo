@@ -1,9 +1,7 @@
 """
 FastAPI application entry point for the Todo Backend.
-Initializes the app with middleware, routes, and configuration.
 """
 
-# Fix Windows event loop issue for psycopg async
 import sys
 import asyncio
 if sys.platform == 'win32':
@@ -21,11 +19,7 @@ from src.config import get_settings
 from src.database import init_db
 from src.middleware.auth import AuthenticationMiddleware
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
@@ -33,46 +27,26 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Application lifespan context manager.
-    Handles startup and shutdown events.
-    """
-    # Startup
     logger.info("Initializing database...")
     try:
         await init_db()
         logger.info("Database initialized successfully")
     except Exception as e:
-        logger.warning(f"Database initialization failed (continuing with degraded mode): {e}")
-        logger.info("Server starting without database - API will be available but database operations will fail")
-
+        logger.warning(f"Database initialization failed: {e}")
     yield
-
-    # Shutdown
     logger.info("Application shutting down...")
 
 
-# Create FastAPI app instance
 app = FastAPI(
     title=settings.API_TITLE,
     version=settings.API_VERSION,
-    description="Phase II Todo Full-Stack Web Application - Backend API",
+    description="Phase II Todo Full-Stack Web Application - Backend API with AI Chatbot",
     lifespan=lifespan,
     debug=settings.DEBUG,
 )
 
-# Add authentication middleware (will be applied to specific routes)
-# Note: Middleware is applied in reverse order of addition
 app.add_middleware(AuthenticationMiddleware)
-
-# Add trusted host middleware
-# Allow all hosts in development (TrustedHostMiddleware is restrictive, can cause issues)
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["*"]
-)
-
-# Add CORS middleware - MUST be added last to be executed first
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -84,90 +58,41 @@ app.add_middleware(
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    """
-    Health check endpoint for load balancers.
-    Returns 200 OK if the service is running.
-    """
-    return {
-        "status": "healthy",
-        "version": settings.API_VERSION,
-        "environment": settings.ENVIRONMENT,
-    }
+    return {"status": "healthy", "version": settings.API_VERSION, "environment": settings.ENVIRONMENT}
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    """
-    Global exception handler for unhandled exceptions.
-    Returns a safe error response without exposing internal details.
-    """
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "Internal server error",
-            "code": "INTERNAL_ERROR",
-            "message": "An unexpected error occurred. Please try again later.",
-        },
-    )
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
-# Root endpoint
 @app.get("/", tags=["Root"])
 async def root():
-    """Root endpoint providing API information."""
     return {
         "name": settings.API_TITLE,
         "version": settings.API_VERSION,
         "status": "running",
         "endpoints": {
             "health": "/health",
-            "api_docs": "/docs",
-            "redoc": "/redoc",
+            "docs": "/docs",
             "auth": "/api/v1/auth",
             "tasks": "/api/v1/tasks",
-            "chat_imported": str(chat is not None),
-            "chat_endpoint": "/api/{user_id}/chat" if chat else None,
-        },
+            "chat": "/api/{user_id}/chat"
+        }
     }
 
 
-# Import and include API routes
+# Import and include routers
 from src.api import auth, tasks
-# Debug: Import chat router with error handling
-try:
-    from src.chatbot.api.routes import chat
-    print("SUCCESS: chat module imported")
-except Exception as e:
-    print(f"ERROR importing chat: {e}")
-    import traceback
-    traceback.print_exc()
-    chat = None
+from src.chatbot.api.routes import chat
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
-if chat:
-    app.include_router(chat.router, tags=["Chat"])
-    print("SUCCESS: chat router registered")
-else:
-    print("WARNING: chat router not registered due to import error")
+app.include_router(chat.router, prefix="/api", tags=["Chat"])
+
+logger.info("All routers registered: auth, tasks, chat")
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "src.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.DEBUG,
-        log_level="info",
-    )
-
-# Diagnostic endpoint to check chat router status
-@app.get("/debug/routes")
-async def debug_routes():
-    """Debug endpoint to list all registered routes."""
-    routes = []
-    for route in app.routes:
-        if hasattr(route, 'path'):
-            routes.append({"path": route.path, "methods": getattr(route, 'methods', None)})
-    return {"routes": routes, "chat_imported": chat is not None}
+    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=settings.DEBUG)
