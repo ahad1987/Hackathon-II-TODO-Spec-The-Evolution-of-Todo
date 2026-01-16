@@ -1,0 +1,15 @@
+# Build caches
+.next/
+frontend/.next/
+backend/__pycache__/
+
+# Dependencies
+node_modules/
+*.egg-info/
+.Python
+
+# Large files
+*.pack
+*.bin
+dist/
+build/
