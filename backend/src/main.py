@@ -132,11 +132,23 @@ async def root():
 
 # Import and include API routes
 from src.api import auth, tasks
-from src.chatbot.api.routes import chat
+# Debug: Import chat router with error handling
+try:
+    from src.chatbot.api.routes import chat
+    print("SUCCESS: chat module imported")
+except Exception as e:
+    print(f"ERROR importing chat: {e}")
+    import traceback
+    traceback.print_exc()
+    chat = None
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
-app.include_router(chat.router, tags=["Chat"])
+if chat:
+    app.include_router(chat.router, tags=["Chat"])
+    print("SUCCESS: chat router registered")
+else:
+    print("WARNING: chat router not registered due to import error")
 
 
 if __name__ == "__main__":
