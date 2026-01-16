@@ -67,6 +67,7 @@ async def init_db() -> None:
         # Import models to register them with SQLModel
         from src.models.user import User  # noqa: F401
         from src.models.task import Task  # noqa: F401
+        from src.chatbot.models import Conversation, Message  # noqa: F401
 
         # Create all tables
         async with engine.begin() as conn:
@@ -87,6 +88,7 @@ async def drop_db() -> None:
 
         from src.models.user import User  # noqa: F401
         from src.models.task import Task  # noqa: F401
+        from src.chatbot.models import Conversation, Message  # noqa: F401
 
         async with engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.drop_all)
@@ -122,6 +124,7 @@ def init_sync_db() -> None:
 
         from src.models.user import User  # noqa: F401
         from src.models.task import Task  # noqa: F401
+        from src.chatbot.models import Conversation, Message  # noqa: F401
 
         SQLModel.metadata.create_all(sync_engine)
         logger.info("Database tables created successfully (sync)")
