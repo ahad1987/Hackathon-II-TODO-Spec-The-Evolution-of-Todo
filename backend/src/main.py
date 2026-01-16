@@ -1,4 +1,6 @@
-"""FastAPI application entry point."""
+"""
+FastAPI application entry point for the Todo Backend.
+"""
 
 import sys
 import asyncio
@@ -29,7 +31,7 @@ async def lifespan(app: FastAPI):
         await init_db()
         logger.info("Database initialized successfully")
     except Exception as e:
-        logger.warning(f"Database init failed: {e}")
+        logger.warning(f"Database init failed (continuing): {e}")
     yield
     logger.info("Shutting down...")
 
@@ -42,6 +44,7 @@ app = FastAPI(
     debug=settings.DEBUG,
 )
 
+# Middleware
 app.add_middleware(AuthenticationMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 app.add_middleware(
@@ -53,15 +56,24 @@ app.add_middleware(
 )
 
 
-@app.get("/health")
+@app.get("/health", tags=["Health"])
 async def health_check():
     return {"status": "healthy", "version": settings.API_VERSION}
 
 
-@app.get("/")
+@app.get("/", tags=["Root"])
 async def root():
-    routes = [{"path": r.path, "methods": list(r.methods) if hasattr(r, 'methods') else None} for r in app.routes]
-    return {"name": settings.API_TITLE, "routes": routes}
+    """Root endpoint - lists all available routes."""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            routes.append({"path": route.path, "methods": list(route.methods)})
+    return {
+        "name": settings.API_TITLE,
+        "version": settings.API_VERSION,
+        "status": "running",
+        "routes": routes
+    }
 
 
 @app.exception_handler(Exception)
@@ -70,17 +82,23 @@ async def global_exception_handler(request, exc):
     return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
+# ============================================
+# ROUTER REGISTRATION - CRITICAL SECTION
+# ============================================
 from src.api import auth, tasks
 from src.chatbot.api.routes import chat
 
+# All routes under /api/v1 prefix
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
-app.include_router(chat.router, prefix="/api", tags=["Chat"])
+app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])  # <-- FIXED: Now at /api/v1/chat
 
-# Log all registered routes
+logger.info("=" * 50)
+logger.info("REGISTERED ROUTES:")
 for route in app.routes:
-    if hasattr(route, 'path'):
-        logger.info(f"Route registered: {route.path} {getattr(route, 'methods', 'N/A')}")
+    if hasattr(route, 'path') and hasattr(route, 'methods'):
+        logger.info(f"  {route.methods} {route.path}")
+logger.info("=" * 50)
 
 
 if __name__ == "__main__":
