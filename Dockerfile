@@ -44,3 +44,5 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "7860"]
 # Rebuild trigger: Fri, Jan 16, 2026  9:03:20 PM
 
 # Force rebuild 1768594228
+
+# Force rebuild: 1768596960
