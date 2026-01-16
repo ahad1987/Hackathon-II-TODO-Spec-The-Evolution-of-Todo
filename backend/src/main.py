@@ -159,3 +159,13 @@ if __name__ == "__main__":
         reload=settings.DEBUG,
         log_level="info",
     )
+
+# Diagnostic endpoint to check chat router status
+@app.get("/debug/routes")
+async def debug_routes():
+    """Debug endpoint to list all registered routes."""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'path'):
+            routes.append({"path": route.path, "methods": getattr(route, 'methods', None)})
+    return {"routes": routes, "chat_imported": chat is not None}
