@@ -1,9 +1,5 @@
 {
-  "buildCommand": "cd Phase-II/frontend && npm install --include=dev && npm run build",
-  "outputDirectory": "Phase-II/frontend/.next",
-  "framework": "nextjs",
-  "rootDirectory": ".",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "buildCommand": "cd frontend && npm install --include=dev && npm run build",
+  "outputDirectory": "frontend/.next",
+  "framework": "nextjs"
 }
