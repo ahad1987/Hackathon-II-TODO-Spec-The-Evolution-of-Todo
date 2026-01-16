@@ -1,0 +1,8 @@
+HF Space Environment Variables
+==============================
+
+DATABASE_URL: postgresql+psycopg://[your-neon-connection-string]
+BETTER_AUTH_SECRET: 5IfjCheYdC0VJ18YmgU8hqYJ0wAP~-I739ZZC88EoS
+CORS_ORIGINS: https://taskflow-ai-chatbot.netlify.app
+ENVIRONMENT: production
+DEBUG: false
