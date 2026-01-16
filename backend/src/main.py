@@ -60,8 +60,8 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {"name": settings.API_TITLE, "version": settings.API_VERSION, "status": "running",
-            "endpoints": {"health": "/health", "docs": "/docs", "auth": "/api/v1/auth", "tasks": "/api/v1/tasks", "chat": "/api/chat"}}
+    routes = [{"path": r.path, "methods": list(r.methods) if hasattr(r, 'methods') else None} for r in app.routes]
+    return {"name": settings.API_TITLE, "routes": routes}
 
 
 @app.exception_handler(Exception)
@@ -77,7 +77,10 @@ app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
 
-logger.info("Routers registered: auth, tasks, chat (/api/chat)")
+# Log all registered routes
+for route in app.routes:
+    if hasattr(route, 'path'):
+        logger.info(f"Route registered: {route.path} {getattr(route, 'methods', 'N/A')}")
 
 
 if __name__ == "__main__":
