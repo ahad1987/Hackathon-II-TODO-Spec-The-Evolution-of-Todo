@@ -37,7 +37,7 @@ class Settings:
         origin.strip()
         for origin in os.getenv(
             "CORS_ORIGINS",
-            "http://localhost:3000,http://localhost:3001,http://localhost:5173,https://mytodoappv2.vercel.app,https://stately-dieffenbachia-b565a9.netlify.app"
+            "http://localhost:3000,http://localhost:3001,http://localhost:5173,https://mytodoappv2.vercel.app,https://stately-dieffenbachia-b565a9.netlify.app,https://taskflow-ai-chatbot.vercel.app"
         ).split(",")
     ]
 
