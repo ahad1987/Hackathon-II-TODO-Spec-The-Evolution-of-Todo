@@ -1,5 +1,6 @@
 """
 Chat endpoint for Phase-III AI Chatbot.
+Endpoint: POST /api/chat (user_id from JWT token)
 """
 
 import logging
@@ -9,19 +10,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.chatbot.api.dependencies import get_current_user, verify_user_ownership
+from src.chatbot.api.dependencies import get_current_user
 from src.chatbot.services import ConversationService, AgentService
-from src.chatbot.models import MessageCreate
 
 logger = logging.getLogger(__name__)
 
-# Router WITHOUT prefix - prefix will be added in main.py
 router = APIRouter(tags=["chat"])
 
 
 class ChatRequest(BaseModel):
     """Chat request model."""
-    conversation_id: Optional[str] = Field(None, description="Existing conversation ID (omit for new)")
+    conversation_id: Optional[str] = Field(None, description="Existing conversation ID")
     message: str = Field(..., min_length=1, max_length=5000, description="User message")
 
 
@@ -30,23 +29,17 @@ class ChatResponse(BaseModel):
     conversation_id: str = Field(..., description="Conversation ID")
     response: str = Field(..., description="Assistant response")
     tool_calls: List[str] = Field(default_factory=list, description="Tools called")
-    status: str = Field(..., description="Response status: success or error")
+    status: str = Field(..., description="Response status")
 
 
-@router.post("/{user_id}/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def chat(
-    user_id: str,
     request: ChatRequest,
     session: AsyncSession = Depends(get_session),
-    authenticated_user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user)
 ) -> ChatResponse:
-    """
-    Send a message to the AI chatbot.
-    """
-    logger.info(f"Chat request from user {user_id}, authenticated as {authenticated_user_id}")
-    
-    # Verify user ownership
-    verify_user_ownership(authenticated_user_id, user_id)
+    """Send a message to the AI chatbot. User ID extracted from JWT token."""
+    logger.info(f"Chat request from authenticated user: {user_id}")
     
     conversation_service = ConversationService()
     agent_service = AgentService()
@@ -58,28 +51,19 @@ async def chat(
                 session, request.conversation_id, user_id
             )
             if not conversation:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Conversation not found"
-                )
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
         else:
             conversation = await conversation_service.create_conversation(session, user_id)
         
         # Get conversation history
-        history = await conversation_service.get_conversation_history(
-            session, conversation.id, user_id
-        )
+        history = await conversation_service.get_conversation_history(session, conversation.id, user_id)
         history_dicts = [{"role": m.role, "content": m.content} for m in history]
         
         # Save user message
-        await conversation_service.append_message(
-            session, conversation.id, user_id, "user", request.message
-        )
+        await conversation_service.append_message(session, conversation.id, user_id, "user", request.message)
         
         # Process with agent
-        result = await agent_service.process_message(
-            session, user_id, request.message, history_dicts
-        )
+        result = await agent_service.process_message(session, user_id, request.message, history_dicts)
         
         # Save assistant response
         tool_calls_str = ",".join(result.get("tool_calls", []))
