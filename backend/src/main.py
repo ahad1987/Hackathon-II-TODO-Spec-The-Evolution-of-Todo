@@ -58,22 +58,13 @@ app.add_middleware(
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    return {"status": "healthy", "version": settings.API_VERSION}
+    return {"status": "healthy", "version": settings.API_VERSION, "chat_registered": getattr(app.state, 'chat_registered', False)}
 
 
 @app.get("/", tags=["Root"])
 async def root():
-    """Root endpoint - lists all available routes."""
-    routes = []
-    for route in app.routes:
-        if hasattr(route, 'path') and hasattr(route, 'methods'):
-            routes.append({"path": route.path, "methods": list(route.methods)})
-    return {
-        "name": settings.API_TITLE,
-        "version": settings.API_VERSION,
-        "status": "running",
-        "routes": routes
-    }
+    routes = [r.path for r in app.routes if hasattr(r, 'path')]
+    return {"name": settings.API_TITLE, "version": settings.API_VERSION, "routes": routes}
 
 
 @app.exception_handler(Exception)
@@ -82,23 +73,23 @@ async def global_exception_handler(request, exc):
     return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
-# ============================================
-# ROUTER REGISTRATION - CRITICAL SECTION
-# ============================================
+# Import routers
 from src.api import auth, tasks
-from src.chatbot.api.routes import chat
 
-# All routes under /api/v1 prefix
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
-app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])  # <-- FIXED: Now at /api/v1/chat
 
-logger.info("=" * 50)
-logger.info("REGISTERED ROUTES:")
-for route in app.routes:
-    if hasattr(route, 'path') and hasattr(route, 'methods'):
-        logger.info(f"  {route.methods} {route.path}")
-logger.info("=" * 50)
+# Import and register chat router with error handling
+try:
+    from src.chatbot.api.routes.chat import router as chat_router
+    app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
+    app.state.chat_registered = True
+    logger.info("SUCCESS: Chat router registered at /api/v1/chat")
+except Exception as e:
+    app.state.chat_registered = False
+    logger.error(f"FAILED to register chat router: {e}", exc_info=True)
+
+logger.info(f"All routes: {[r.path for r in app.routes if hasattr(r, 'path')]}")
 
 
 if __name__ == "__main__":
