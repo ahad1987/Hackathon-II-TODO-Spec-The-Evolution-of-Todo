@@ -25,7 +25,7 @@ export class ChatService {
    * Creates a new conversation if conversation_id is not provided.
    */
   static async sendMessage(
-    userId: string,
+    _userId: string, // kept for interface compatibility
     message: string,
     conversationId?: string
   ): Promise<ChatResponse> {
