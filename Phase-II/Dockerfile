@@ -1,4 +1,8 @@
 FROM python:3.11-slim
+
+# Cache buster - change this to force rebuild
+ARG CACHEBUST=1768677200
+
 WORKDIR /app
 RUN apt-get update && apt-get install -y gcc libpq-dev curl && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
