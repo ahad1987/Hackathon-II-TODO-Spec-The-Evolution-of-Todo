@@ -31,7 +31,7 @@ export class ChatService {
   ): Promise<ChatResponse> {
     try {
       const client = getApiClient();
-      const response = await client.post(`/api/${userId}/chat`, {
+      const response = await client.post(`/api/v1/chat`, {
         conversation_id: conversationId || undefined,
         message,
       });
