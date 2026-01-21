@@ -1,0 +1,130 @@
+# Default values for TaskFlow AI Chatbot
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  namespace: default
+
+# Backend (FastAPI) configuration
+backend:
+  name: taskflow-backend
+  replicaCount: 1
+
+  image:
+    repository: taskflow-backend
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent  # Use local images in Minikube
+
+  service:
+    type: ClusterIP  # Internal-only (Constitutional requirement)
+    port: 8000  # IMMUTABLE per api-contracts.md
+    targetPort: 8000
+    name: taskflow-backend-service  # DNS name for internal communication
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  # Health probes configuration
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Non-sensitive environment variables (ConfigMap)
+  config:
+    API_PREFIX: "/api/v1"
+    API_TITLE: "Todo API"
+    API_VERSION: "0.1.0"
+    ENVIRONMENT: "development"
+    DEBUG: "False"
+    JWT_ALGORITHM: "HS256"
+    JWT_EXPIRY: "86400"  # 24 hours
+    PASSWORD_HASH_ALGORITHM: "bcrypt"
+    PASSWORD_HASH_ROUNDS: "12"
+
+  # Sensitive secrets (to be overridden in values-local.yaml)
+  # NEVER commit actual secrets to git
+  secrets:
+    DATABASE_URL: "REPLACE_WITH_ACTUAL_DATABASE_URL"
+    BETTER_AUTH_SECRET: "REPLACE_WITH_32_CHAR_SECRET"
+    ANTHROPIC_API_KEY: "REPLACE_WITH_ACTUAL_API_KEY"
+    CORS_ORIGINS: "http://localhost:3000,http://localhost:3001,https://taskflow-ai-chatbot.vercel.app"
+
+# Frontend (Next.js) configuration
+frontend:
+  name: taskflow-frontend
+  replicaCount: 1
+
+  image:
+    repository: taskflow-frontend
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent  # Use local images in Minikube
+
+  service:
+    type: NodePort  # External access for local development
+    port: 3000  # IMMUTABLE per api-contracts.md
+    targetPort: 3000
+    nodePort: null  # Auto-assign (30000-32767 range)
+    name: taskflow-frontend-service
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "250m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+
+  # Health probes configuration
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Init container to wait for backend
+  initContainer:
+    enabled: true
+    image: busybox:1.35
+    name: wait-for-backend
+
+  # Non-sensitive environment variables (ConfigMap)
+  config:
+    NEXT_PUBLIC_API_URL: "http://taskflow-backend-service:8000"  # Internal DNS
+    NODE_ENV: "production"
+
+  # Sensitive secrets (to be overridden in values-local.yaml)
+  secrets:
+    BETTER_AUTH_SECRET: "REPLACE_WITH_32_CHAR_SECRET"  # MUST match backend
+    BETTER_AUTH_URL: "REPLACE_WITH_MINIKUBE_URL"  # e.g., http://192.168.49.2:30080

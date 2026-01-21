@@ -1,0 +1,64 @@
+🎉 TaskFlow AI Chatbot has been deployed to Kubernetes!
+
+DEPLOYED COMPONENTS:
+✓ Backend (FastAPI):  {{ .Values.backend.name }}
+✓ Frontend (Next.js): {{ .Values.frontend.name }}
+
+BACKEND SERVICE:
+  Type: {{ .Values.backend.service.type }}
+  Internal DNS: {{ .Values.backend.service.name }}:{{ .Values.backend.service.port }}
+
+  Health Check:
+    kubectl exec -it deployment/{{ .Values.backend.name }} -- curl http://localhost:{{ .Values.backend.service.port }}/health
+
+FRONTEND SERVICE:
+  Type: {{ .Values.frontend.service.type }}
+  Port: {{ .Values.frontend.service.port }}
+
+  To get the frontend URL:
+    {{- if eq .Values.frontend.service.type "NodePort" }}
+    export NODE_PORT=$(kubectl get service {{ .Values.frontend.service.name }} -o jsonpath='{.spec.ports[0].nodePort}')
+    export NODE_IP=$(minikube ip)
+    echo "Frontend: http://$NODE_IP:$NODE_PORT"
+    {{- else }}
+    kubectl port-forward service/{{ .Values.frontend.service.name }} {{ .Values.frontend.service.port }}:{{ .Values.frontend.service.port }}
+    echo "Frontend: http://localhost:{{ .Values.frontend.service.port }}"
+    {{- end }}
+
+CHECK POD STATUS:
+  kubectl get pods -l app.kubernetes.io/name={{ include "taskflow.name" . }}
+
+  Expected output:
+    NAME                                READY   STATUS    RESTARTS   AGE
+    {{ .Values.backend.name }}-xxxxx    1/1     Running   0          Xm
+    {{ .Values.frontend.name }}-xxxxx   1/1     Running   0          Xm
+
+VIEW LOGS:
+  Backend:  kubectl logs -f deployment/{{ .Values.backend.name }}
+  Frontend: kubectl logs -f deployment/{{ .Values.frontend.name }}
+
+VALIDATE DEPLOYMENT:
+  1. Check backend health:
+     kubectl exec deployment/{{ .Values.backend.name }} -- curl -s http://localhost:{{ .Values.backend.service.port }}/health
+
+  2. Check backend API docs:
+     Open backend docs at: http://<minikube-ip>:<nodeport>/docs (if exposed)
+
+  3. Access frontend:
+     Open browser to the frontend URL from above
+
+TROUBLESHOOTING:
+  - If pods are not Running: kubectl describe pod <pod-name>
+  - If health checks fail: kubectl logs <pod-name>
+  - If backend not reachable: kubectl exec <frontend-pod> -- nslookup {{ .Values.backend.service.name }}
+
+ROLLBACK (if needed):
+  helm rollback {{ .Release.Name }}
+
+UNINSTALL:
+  helm uninstall {{ .Release.Name }}
+
+For detailed deployment guide, see: Phase-IV/DEPLOYMENT.md
+For rollback procedures, see: Phase-IV/ROLLBACK.md
+
+🚀 Deployment complete! Test the full workflow: signup → login → create task → chatbot interaction

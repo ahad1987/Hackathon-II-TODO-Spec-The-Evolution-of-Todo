@@ -1,0 +1,53 @@
+# values-local.yaml.template
+# Copy this file to values-local.yaml and fill in your actual secrets
+# NEVER commit values-local.yaml to git!
+
+# Backend secrets (REQUIRED - fill in actual values)
+backend:
+  secrets:
+    # PostgreSQL connection string
+    # Format: postgresql://user:password@host:port/database
+    # Example: postgresql://postgres:mypassword@192.168.1.100:5432/taskflow
+    DATABASE_URL: "postgresql://user:password@host:port/database"
+
+    # JWT signing secret (MUST be at least 32 characters)
+    # Generate with: openssl rand -base64 32
+    # CRITICAL: This MUST match frontend BETTER_AUTH_SECRET exactly
+    BETTER_AUTH_SECRET: "your-32-character-or-longer-secret-here"
+
+    # Anthropic Claude API key
+    # Get from: https://console.anthropic.com/
+    ANTHROPIC_API_KEY: "sk-ant-api03-your-key-here"
+
+    # CORS origins (add Minikube IP and NodePort)
+    # Get Minikube IP with: minikube ip
+    # Get NodePort with: kubectl get svc taskflow-frontend-service
+    # Format: http://IP:PORT,https://other-domain.com
+    CORS_ORIGINS: "http://localhost:3000,http://MINIKUBE_IP:NODEPORT,https://taskflow-ai-chatbot.vercel.app"
+
+# Frontend secrets (REQUIRED - fill in actual values)
+frontend:
+  secrets:
+    # MUST match backend BETTER_AUTH_SECRET exactly
+    BETTER_AUTH_SECRET: "your-32-character-or-longer-secret-here"
+
+    # Frontend URL for auth callbacks
+    # Replace MINIKUBE_IP and NODEPORT with actual values
+    # Get with: minikube ip and kubectl get svc taskflow-frontend-service
+    BETTER_AUTH_URL: "http://MINIKUBE_IP:NODEPORT"
+
+# Optional: Adjust resource limits if needed
+# backend:
+#   resources:
+#     requests:
+#       memory: "512Mi"
+#       cpu: "500m"
+#     limits:
+#       memory: "1Gi"
+#       cpu: "1000m"
+
+# Optional: Enable multiple replicas for testing
+# backend:
+#   replicaCount: 2
+# frontend:
+#   replicaCount: 2
