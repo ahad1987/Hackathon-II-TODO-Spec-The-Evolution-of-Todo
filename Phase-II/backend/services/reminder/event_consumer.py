@@ -18,7 +18,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
-from .priority_queue import get_reminder_queue, ReminderItem
+from services.reminder.priority_queue import get_reminder_queue, ReminderItem
 
 logger = logging.getLogger(__name__)
 

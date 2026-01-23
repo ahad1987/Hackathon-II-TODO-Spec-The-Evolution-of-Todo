@@ -20,7 +20,7 @@ from datetime import datetime
 from typing import Optional
 import httpx
 
-from .priority_queue import get_reminder_queue, save_reminders_to_db
+from services.reminder.priority_queue import get_reminder_queue, save_reminders_to_db
 
 logger = logging.getLogger(__name__)
 

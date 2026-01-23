@@ -8,6 +8,7 @@ Phase V Extensions:
 """
 
 import logging
+logger = logging.getLogger(__name__)
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,13 +21,15 @@ from src.config import get_settings
 # Phase V imports
 try:
     from src.utils.recurrence import validate_pattern
-    from src.dapr.publisher import get_publisher
+    from src.dapr_integration.factory import get_publisher
+
+
     PHASE_V_ENABLED = True
 except ImportError:
     PHASE_V_ENABLED = False
     logger.warning("Phase V modules not available - recurring tasks and events disabled")
 
-logger = logging.getLogger(__name__)
+
 settings = get_settings()
 
 

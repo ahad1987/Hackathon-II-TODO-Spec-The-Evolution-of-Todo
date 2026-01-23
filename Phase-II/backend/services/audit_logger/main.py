@@ -25,6 +25,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from typing import List
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 
 # Configure logging
 logging.basicConfig(
@@ -50,7 +58,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Start audit storage background task
     try:
-        from .storage import get_audit_storage
+        from storage import get_audit_storage
         storage = get_audit_storage()
         await storage.start_background_task()
         logger.info("Audit storage started (flush every 1 second)")
@@ -65,7 +73,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Stop audit storage and flush remaining events
     try:
-        from .storage import get_audit_storage
+        from storage import get_audit_storage
         storage = get_audit_storage()
         await storage.stop_background_task()
         logger.info("Audit storage stopped and flushed")
@@ -109,7 +117,7 @@ async def readiness_probe():
     Checks if service is ready (storage initialized).
     """
     try:
-        from .storage import get_audit_storage
+        from storage import get_audit_storage
 
         storage = get_audit_storage()
         buffer_size = len(storage._buffer)
@@ -163,7 +171,7 @@ async def get_task_audit_history(task_id: str, limit: int = 100):
     - 500: Server error
     """
     try:
-        from .storage import get_audit_storage
+        from storage import get_audit_storage
 
         storage = get_audit_storage()
         events = await storage.get_task_events(task_id, limit)
@@ -229,7 +237,7 @@ async def dapr_subscribe():
 async def handle_task_created(request: Request):
     """Handle task.created events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_task_created_event
+        from event_consumer import handle_task_created_event
         event_data = await request.json()
         await handle_task_created_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -243,7 +251,7 @@ async def handle_task_created(request: Request):
 async def handle_task_updated(request: Request):
     """Handle task.updated events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_task_updated_event
+        from event_consumer import handle_task_updated_event
         event_data = await request.json()
         await handle_task_updated_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -257,7 +265,7 @@ async def handle_task_updated(request: Request):
 async def handle_task_completed(request: Request):
     """Handle task.completed events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_task_completed_event
+        from event_consumer import handle_task_completed_event
         event_data = await request.json()
         await handle_task_completed_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -271,7 +279,7 @@ async def handle_task_completed(request: Request):
 async def handle_task_deleted(request: Request):
     """Handle task.deleted events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_task_deleted_event
+        from event_consumer import handle_task_deleted_event
         event_data = await request.json()
         await handle_task_deleted_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -286,7 +294,7 @@ async def handle_task_deleted(request: Request):
 @app.get("/")
 async def root():
     """Service info endpoint."""
-    from .storage import get_audit_storage
+    from storage import get_audit_storage
 
     storage = get_audit_storage()
     buffer_size = len(storage._buffer)
@@ -308,9 +316,10 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        "backend.services.audit_logger.main:app",
         host="0.0.0.0",
         port=APP_PORT,
         log_level="info",
         reload=False
     )
+

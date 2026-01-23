@@ -18,7 +18,7 @@ Constitutional Compliance:
 import logging
 from typing import Dict, Any
 
-from .storage import get_audit_storage
+from storage import get_audit_storage
 
 logger = logging.getLogger(__name__)
 

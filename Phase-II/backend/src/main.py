@@ -20,7 +20,7 @@ import uvicorn
 from src.config import get_settings
 from src.database import init_db
 from src.middleware.auth import AuthenticationMiddleware
-from src.dapr import get_publisher, close_publisher  # Phase V
+from src.dapr_integration import get_publisher, close_publisher  # Phase V
 
 # Configure logging
 logging.basicConfig(

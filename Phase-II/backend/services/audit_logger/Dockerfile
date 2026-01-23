@@ -1,37 +1,33 @@
-# Phase V: Audit Logger Service Dockerfile (T064)
-# Constitutional Compliance: Standalone service with Dapr sidecar for Pub/Sub
-
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /app/backend/services/audit_logger
 
-# Install system dependencies
+# Make shared backend imports work
+ENV PYTHONPATH=/app/backend:/app/backend/src
+
+# System dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy backend requirements
+# Install dependencies
 COPY backend/requirements.txt /app/backend/requirements.txt
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
-# Copy backend source code (needed for database models)
+# Copy shared backend code
 COPY backend/src /app/backend/src
 
 # Copy audit logger service
 COPY backend/services/audit_logger /app/backend/services/audit_logger
 
-# Set Python path to include backend src
-ENV PYTHONPATH=/app/backend/src:/app/backend/services/audit_logger
-
-# Expose service port
 EXPOSE 8004
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8004/health/live')" || exit 1
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8004/health/ready')" || exit 1
 
-# Run service
+
+
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8004", "--log-level", "info"]
+

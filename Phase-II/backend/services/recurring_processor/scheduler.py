@@ -36,7 +36,7 @@ async def process_recurring_tasks():
     try:
         logger.info("Scheduler triggered - processing recurring tasks...")
 
-        from .task_generator import generate_due_task_instances
+        from services.recurring_processor.task_generator import generate_due_task_instances
 
         # Generate task instances for all recurring tasks
         instances_created = await generate_due_task_instances()

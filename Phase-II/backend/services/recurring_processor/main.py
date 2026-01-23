@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Start background scheduler
     try:
-        from .scheduler import start_scheduler, stop_scheduler
+        from services.recurring_processor.scheduler import start_scheduler, stop_scheduler
         await start_scheduler()
         logger.info("Recurring task scheduler started")
     except Exception as e:
@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Stop background scheduler
     try:
-        from .scheduler import stop_scheduler
+        from services.recurring_processor.scheduler import stop_scheduler
         await stop_scheduler()
         logger.info("Recurring task scheduler stopped")
     except Exception as e:
@@ -104,7 +104,7 @@ async def readiness_probe():
     Checks if service is ready to process events (scheduler running).
     """
     try:
-        from .scheduler import is_scheduler_running
+        from services.recurring_processor.scheduler import is_scheduler_running
         scheduler_running = is_scheduler_running()
 
         if scheduler_running:
@@ -242,6 +242,19 @@ async def root():
         }
     }
 
+
+from fastapi import FastAPI
+import uvicorn
+
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/health/live")
+def live():
+    return {"status": "alive"}
 
 if __name__ == "__main__":
     uvicorn.run(

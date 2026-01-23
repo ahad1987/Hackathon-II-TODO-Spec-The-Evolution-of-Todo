@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Start notification manager background tasks
     try:
-        from .sse_handler import get_notification_manager
+        from services.notification.sse_handler import get_notification_manager
         manager = get_notification_manager()
         await manager.start_background_tasks()
         logger.info("Notification manager started (heartbeat + cleanup tasks)")
@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Stop notification manager background tasks
     try:
-        from .sse_handler import get_notification_manager
+        from services.notification.sse_handler import get_notification_manager
         manager = get_notification_manager()
         await manager.stop_background_tasks()
         logger.info("Notification manager stopped")
@@ -150,7 +150,7 @@ async def readiness_probe():
     Checks if service is ready (notification manager running).
     """
     try:
-        from .sse_handler import get_notification_manager
+        from services.notification.sse_handler import get_notification_manager
 
         manager = get_notification_manager()
         connection_count = manager.get_connection_count()
@@ -220,7 +220,7 @@ async def notification_stream(
         HTTPException: If max connections exceeded (429)
     """
     try:
-        from .sse_handler import get_notification_manager
+        from services.notification.sse_handler import get_notification_manager
 
         manager = get_notification_manager()
 
@@ -329,7 +329,7 @@ async def dapr_subscribe():
 async def handle_task_created(request: Request):
     """Handle task.created events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_task_created_event
+        from services.notification.event_consumer import handle_task_created_event
         event_data = await request.json()
         await handle_task_created_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -343,7 +343,7 @@ async def handle_task_created(request: Request):
 async def handle_task_updated(request: Request):
     """Handle task.updated events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_task_updated_event
+        from services.notification.event_consumer import handle_task_updated_event
         event_data = await request.json()
         await handle_task_updated_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -357,7 +357,7 @@ async def handle_task_updated(request: Request):
 async def handle_task_completed(request: Request):
     """Handle task.completed events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_task_completed_event
+        from services.notification.event_consumer import handle_task_completed_event
         event_data = await request.json()
         await handle_task_completed_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -371,7 +371,7 @@ async def handle_task_completed(request: Request):
 async def handle_task_deleted(request: Request):
     """Handle task.deleted events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_task_deleted_event
+        from services.notification.event_consumer import handle_task_deleted_event
         event_data = await request.json()
         await handle_task_deleted_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -385,7 +385,7 @@ async def handle_task_deleted(request: Request):
 async def handle_reminder_triggered(request: Request):
     """Handle reminder.triggered events from Dapr Pub/Sub."""
     try:
-        from .event_consumer import handle_reminder_triggered_event
+        from services.notification.event_consumer import handle_reminder_triggered_event
         event_data = await request.json()
         await handle_reminder_triggered_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -400,7 +400,7 @@ async def handle_reminder_triggered(request: Request):
 @app.get("/")
 async def root():
     """Service info endpoint."""
-    from .sse_handler import get_notification_manager
+    from services.notification.sse_handler import get_notification_manager
 
     manager = get_notification_manager()
     connection_count = manager.get_connection_count()

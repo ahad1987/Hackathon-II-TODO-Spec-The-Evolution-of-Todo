@@ -18,7 +18,7 @@ import logging
 from typing import Dict, Any
 from datetime import datetime
 
-from .sse_handler import get_notification_manager
+from services.notification.sse_handler import get_notification_manager
 
 logger = logging.getLogger(__name__)
 

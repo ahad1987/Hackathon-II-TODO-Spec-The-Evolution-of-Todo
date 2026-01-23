@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Initialize priority queue and load persisted reminders
     try:
-        from .priority_queue import get_reminder_queue, load_reminders_from_db
+        from services.reminder.priority_queue import get_reminder_queue, load_reminders_from_db
         queue = get_reminder_queue()
         await load_reminders_from_db(queue)
         logger.info("Reminder queue initialized and loaded from database")
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Start reminder scheduler
     try:
-        from .scheduler import start_reminder_scheduler, stop_reminder_scheduler
+        from services.reminder.scheduler import start_reminder_scheduler, stop_reminder_scheduler
         await start_reminder_scheduler()
         logger.info("Reminder scheduler started")
     except Exception as e:
@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Stop reminder scheduler
     try:
-        from .scheduler import stop_reminder_scheduler
+        from services.reminder.scheduler import stop_reminder_scheduler
         await stop_reminder_scheduler()
         logger.info("Reminder scheduler stopped")
     except Exception as e:
@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI):
 
     # Phase V: Persist reminders to database
     try:
-        from .priority_queue import get_reminder_queue, save_reminders_to_db
+        from services.reminder.priority_queue import get_reminder_queue, save_reminders_to_db
         queue = get_reminder_queue()
         await save_reminders_to_db(queue)
         logger.info("Reminders persisted to database")
@@ -124,8 +124,8 @@ async def readiness_probe():
     Checks if service is ready (queue initialized, scheduler running).
     """
     try:
-        from .priority_queue import get_reminder_queue
-        from .scheduler import is_scheduler_running
+        from services.reminder.priority_queue import get_reminder_queue
+        from services.reminder.scheduler import is_scheduler_running
 
         queue = get_reminder_queue()
         scheduler_running = is_scheduler_running()
@@ -208,7 +208,7 @@ async def handle_task_created(request: Request):
     If task has reminder_offset, schedule reminder.
     """
     try:
-        from .event_consumer import handle_task_created_event
+        from services.reminder.event_consumer import handle_task_created_event
         event_data = await request.json()
         await handle_task_created_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -226,7 +226,7 @@ async def handle_task_updated(request: Request):
     If reminder_offset changed, reschedule reminder.
     """
     try:
-        from .event_consumer import handle_task_updated_event
+        from services.reminder.event_consumer import handle_task_updated_event
         event_data = await request.json()
         await handle_task_updated_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -244,7 +244,7 @@ async def handle_task_deleted(request: Request):
     Cancel reminder if exists.
     """
     try:
-        from .event_consumer import handle_task_deleted_event
+        from services.reminder.event_consumer import handle_task_deleted_event
         event_data = await request.json()
         await handle_task_deleted_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -262,7 +262,7 @@ async def handle_task_completed(request: Request):
     Cancel reminder if exists.
     """
     try:
-        from .event_consumer import handle_task_completed_event
+        from services.reminder.event_consumer import handle_task_completed_event
         event_data = await request.json()
         await handle_task_completed_event(event_data)
         return JSONResponse(status_code=200, content={"success": True})
@@ -288,6 +288,18 @@ async def root():
         }
     }
 
+from fastapi import FastAPI
+import uvicorn
+
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/health/live")
+def live():
+    return {"status": "alive"}
 
 if __name__ == "__main__":
     uvicorn.run(
@@ -297,3 +309,4 @@ if __name__ == "__main__":
         log_level="info",
         reload=False
     )
+
