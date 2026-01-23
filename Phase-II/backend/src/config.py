@@ -70,6 +70,12 @@ class Settings:
     PASSWORD_MIN_LENGTH: int = 8
     EMAIL_MAX_LENGTH: int = 255
 
+    # Phase V - Dapr Configuration
+    DAPR_ENABLED: bool = os.getenv("DAPR_ENABLED", "true").lower() in ("true", "1", "yes")
+    DAPR_HTTP_PORT: int = int(os.getenv("DAPR_HTTP_PORT", "3500"))
+    DAPR_GRPC_PORT: int = int(os.getenv("DAPR_GRPC_PORT", "50001"))
+    PUBSUB_NAME: str = os.getenv("PUBSUB_NAME", "taskflow-pubsub")
+
     def __init__(self):
         """Validate critical settings on initialization."""
         if not self.DATABASE_URL:

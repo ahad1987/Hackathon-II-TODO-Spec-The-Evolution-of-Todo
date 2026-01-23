@@ -605,17 +605,17 @@ Focus on being helpful and preventing errors."""
                 "tool_calls": ["list_tasks"]
             }
 
-        # Find matching task - look for any word in message that matches a task
+        # Find matching task using improved matching
         pending_tasks = [t for t in list_result["data"]["tasks"] if not t["completed"]]
-        matching_task = None
-        message_lower = message.lower()
 
-        # Try to find task by looking for task titles in message
-        for task in pending_tasks:
-            task_title_lower = task["title"].lower()
-            if task_title_lower in message_lower or any(word in message_lower for word in task_title_lower.split()):
-                matching_task = task
-                break
+        if not pending_tasks:
+            return {
+                "status": "success",
+                "response": "You don't have any pending tasks to complete! All done! 🎉",
+                "tool_calls": ["list_tasks"]
+            }
+
+        matching_task = self._find_best_matching_task(message, pending_tasks)
 
         if not matching_task:
             task_list = ", ".join(t['title'] for t in pending_tasks)
@@ -668,15 +668,11 @@ Focus on being helpful and preventing errors."""
                 "tool_calls": ["list_tasks"]
             }
 
-        # Find matching task
-        matching_task = None
-        message_lower = message.lower()
-
-        for task in list_result["data"]["tasks"]:
-            task_title_lower = task["title"].lower()
-            if task_title_lower in message_lower or any(word in message_lower for word in task_title_lower.split()):
-                matching_task = task
-                break
+        # Find matching task using improved matching
+        matching_task = self._find_best_matching_task(
+            message,
+            list_result["data"]["tasks"]
+        )
 
         if not matching_task:
             task_list = ", ".join(t['title'] for t in list_result["data"]["tasks"])
@@ -787,6 +783,59 @@ Focus on being helpful and preventing errors."""
             "response": f"Please tell me what to change '{matching_task['title']}' to. (e.g., 'update {matching_task['title']} to buy groceries')",
             "tool_calls": ["list_tasks"]
         }
+
+    @staticmethod
+    def _find_best_matching_task(message: str, tasks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Find the best matching task from user message.
+
+        Matching priority:
+        1. Exact title match (case-insensitive)
+        2. Title contained in message
+        3. Most words matching (scored by match count)
+
+        This prevents matching "buy laptop" when user says "remove buy appliances"
+        """
+        message_lower = message.lower()
+
+        # Remove common action words to get the task reference
+        action_words = ["delete", "remove", "drop", "complete", "finish", "mark", "done", "update", "change", "the", "task", "a", "my"]
+        message_words = set(message_lower.split())
+        for word in action_words:
+            message_words.discard(word)
+
+        best_match = None
+        best_score = 0
+
+        for task in tasks:
+            task_title_lower = task["title"].lower()
+            task_words = set(task_title_lower.split())
+
+            # Priority 1: Exact match
+            if task_title_lower in message_lower:
+                return task
+
+            # Priority 2: Score by word overlap
+            # Count how many words from task title appear in message
+            matching_words = task_words.intersection(message_words)
+
+            if matching_words:
+                # Score = matching words / total task words (higher = better match)
+                score = len(matching_words) / len(task_words)
+
+                # Bonus: if ALL task words match, prioritize it
+                if len(matching_words) == len(task_words):
+                    score += 1
+
+                if score > best_score:
+                    best_score = score
+                    best_match = task
+
+        # Only return if we have a reasonable match (at least 50% of task words matched)
+        if best_score >= 0.5:
+            return best_match
+
+        return None
 
     @staticmethod
     def _extract_task_title(message: str) -> Optional[str]:

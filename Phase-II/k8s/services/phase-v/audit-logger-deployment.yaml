@@ -1,0 +1,146 @@
+---
+# Phase V: Audit Logger Service Deployment (T065)
+# Constitutional Compliance: Uses Dapr for Pub/Sub subscriptions, stores to task_events table
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-logger-config
+  namespace: default
+  labels:
+    app: audit-logger
+    phase: phase-v
+data:
+  APP_PORT: "8004"
+  DAPR_HTTP_PORT: "3500"
+  DAPR_GRPC_PORT: "50001"
+  PUBSUB_NAME: "taskflow-pubsub"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-logger
+  namespace: default
+  labels:
+    app: audit-logger
+    phase: phase-v
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8004
+    targetPort: 8004
+    protocol: TCP
+    name: http
+  selector:
+    app: audit-logger
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-logger
+  namespace: default
+  labels:
+    app: audit-logger
+    phase: phase-v
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: audit-logger
+  template:
+    metadata:
+      labels:
+        app: audit-logger
+      annotations:
+        # Dapr sidecar annotations
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "audit-logger"
+        dapr.io/app-port: "8004"
+        dapr.io/app-protocol: "http"
+        dapr.io/log-level: "info"
+        dapr.io/sidecar-cpu-limit: "500m"
+        dapr.io/sidecar-memory-limit: "512Mi"
+        dapr.io/sidecar-cpu-request: "100m"
+        dapr.io/sidecar-memory-request: "256Mi"
+        dapr.io/enable-metrics: "true"
+        dapr.io/metrics-port: "9090"
+
+    spec:
+      containers:
+      - name: audit-logger
+        image: audit-logger:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8004
+          name: http
+          protocol: TCP
+
+        env:
+        - name: APP_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: audit-logger-config
+              key: APP_PORT
+        - name: DAPR_HTTP_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: audit-logger-config
+              key: DAPR_HTTP_PORT
+        - name: DAPR_GRPC_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: audit-logger-config
+              key: DAPR_GRPC_PORT
+        - name: PUBSUB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: audit-logger-config
+              key: PUBSUB_NAME
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: database-url
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8004
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8004
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+
+        startupProbe:
+          httpGet:
+            path: /health/live
+            port: 8004
+            scheme: HTTP
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 12
+          successThreshold: 1

@@ -1,0 +1,294 @@
+# Phase V: Docker Compose for Local Development (T068)
+# Runs all Phase V services with Dapr sidecars
+# Constitutional Compliance: All services use Dapr for Pub/Sub (NO direct Kafka clients)
+
+version: '3.8'
+
+services:
+  # ========== Infrastructure Services ==========
+  
+  postgres:
+    image: postgres:15-alpine
+    container_name: taskflow-postgres
+    environment:
+      POSTGRES_DB: todo_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: taskflow-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: taskflow-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  redis:
+    image: redis:7-alpine
+    container_name: taskflow-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== Dapr Services ==========
+  
+  dapr-placement:
+    image: daprio/dapr:1.12.0
+    container_name: taskflow-dapr-placement
+    command: ["./placement", "-port", "50006"]
+    ports:
+      - "50006:50006"
+
+  # ========== Application Services ==========
+  
+  # Main Backend API (includes Task API and Chat API)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskflow-backend
+    depends_on:
+      - postgres
+      - kafka
+      - redis
+    ports:
+      - "8000:8000"
+      - "50001:50001"  # Dapr gRPC port
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/todo_db
+      REDIS_URL: redis://redis:6379
+      DAPR_HTTP_PORT: 3500
+      DAPR_GRPC_PORT: 50001
+      PUBSUB_NAME: taskflow-pubsub
+      JWT_SECRET_KEY: dev-secret-key-change-in-production
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    volumes:
+      - ./backend/src:/app/src
+    restart: unless-stopped
+
+  backend-dapr:
+    image: daprio/daprd:1.12.0
+    container_name: taskflow-backend-dapr
+    command: [
+      "./daprd",
+      "-app-id", "backend",
+      "-app-port", "8000",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50001",
+      "-placement-host-address", "dapr-placement:50006",
+      "-components-path", "/components"
+    ]
+    depends_on:
+      - backend
+      - dapr-placement
+    network_mode: "service:backend"
+    volumes:
+      - ./k8s/dapr:/components
+
+  # Recurring Task Processor
+  recurring-processor:
+    build:
+      context: .
+      dockerfile: ./backend/services/recurring_processor/Dockerfile
+    container_name: taskflow-recurring-processor
+    depends_on:
+      - postgres
+      - kafka
+    ports:
+      - "8001:8001"
+      - "50002:50002"  # Dapr gRPC port
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/todo_db
+      DAPR_HTTP_PORT: 3500
+      DAPR_GRPC_PORT: 50002
+      APP_PORT: 8001
+    volumes:
+      - ./backend/src:/app/backend/src
+      - ./backend/services/recurring_processor:/app/backend/services/recurring_processor
+    restart: unless-stopped
+
+  recurring-processor-dapr:
+    image: daprio/daprd:1.12.0
+    container_name: taskflow-recurring-processor-dapr
+    command: [
+      "./daprd",
+      "-app-id", "recurring-processor",
+      "-app-port", "8001",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50002",
+      "-placement-host-address", "dapr-placement:50006",
+      "-components-path", "/components"
+    ]
+    depends_on:
+      - recurring-processor
+      - dapr-placement
+    network_mode: "service:recurring-processor"
+    volumes:
+      - ./k8s/dapr:/components
+
+  # Reminder Service
+  reminder-service:
+    build:
+      context: .
+      dockerfile: ./backend/services/reminder/Dockerfile
+    container_name: taskflow-reminder-service
+    depends_on:
+      - postgres
+      - kafka
+      - redis
+    ports:
+      - "8002:8002"
+      - "50003:50003"  # Dapr gRPC port
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/todo_db
+      REDIS_URL: redis://redis:6379
+      DAPR_HTTP_PORT: 3500
+      DAPR_GRPC_PORT: 50003
+      APP_PORT: 8002
+    volumes:
+      - ./backend/src:/app/backend/src
+      - ./backend/services/reminder:/app/backend/services/reminder
+    restart: unless-stopped
+
+  reminder-service-dapr:
+    image: daprio/daprd:1.12.0
+    container_name: taskflow-reminder-service-dapr
+    command: [
+      "./daprd",
+      "-app-id", "reminder-service",
+      "-app-port", "8002",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50003",
+      "-placement-host-address", "dapr-placement:50006",
+      "-components-path", "/components"
+    ]
+    depends_on:
+      - reminder-service
+      - dapr-placement
+    network_mode: "service:reminder-service"
+    volumes:
+      - ./k8s/dapr:/components
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./backend/services/notification/Dockerfile
+    container_name: taskflow-notification-service
+    depends_on:
+      - kafka
+    ports:
+      - "8003:8003"
+      - "50004:50004"  # Dapr gRPC port
+    environment:
+      DAPR_HTTP_PORT: 3500
+      DAPR_GRPC_PORT: 50004
+      APP_PORT: 8003
+    volumes:
+      - ./backend/services/notification:/app/backend/services/notification
+    restart: unless-stopped
+
+  notification-service-dapr:
+    image: daprio/daprd:1.12.0
+    container_name: taskflow-notification-service-dapr
+    command: [
+      "./daprd",
+      "-app-id", "notification-service",
+      "-app-port", "8003",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50004",
+      "-placement-host-address", "dapr-placement:50006",
+      "-components-path", "/components"
+    ]
+    depends_on:
+      - notification-service
+      - dapr-placement
+    network_mode: "service:notification-service"
+    volumes:
+      - ./k8s/dapr:/components
+
+  # Audit Logger Service
+  audit-logger:
+    build:
+      context: .
+      dockerfile: ./backend/services/audit_logger/Dockerfile
+    container_name: taskflow-audit-logger
+    depends_on:
+      - postgres
+      - kafka
+    ports:
+      - "8004:8004"
+      - "50005:50005"  # Dapr gRPC port
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/todo_db
+      DAPR_HTTP_PORT: 3500
+      DAPR_GRPC_PORT: 50005
+      APP_PORT: 8004
+    volumes:
+      - ./backend/src:/app/backend/src
+      - ./backend/services/audit_logger:/app/backend/services/audit_logger
+    restart: unless-stopped
+
+  audit-logger-dapr:
+    image: daprio/daprd:1.12.0
+    container_name: taskflow-audit-logger-dapr
+    command: [
+      "./daprd",
+      "-app-id", "audit-logger",
+      "-app-port", "8004",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50005",
+      "-placement-host-address", "dapr-placement:50006",
+      "-components-path", "/components"
+    ]
+    depends_on:
+      - audit-logger
+      - dapr-placement
+    network_mode: "service:audit-logger"
+    volumes:
+      - ./k8s/dapr:/components
+
+  # ========== Monitoring Services (Optional) ==========
+  
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: taskflow-zipkin
+    ports:
+      - "9411:9411"
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: taskflow-network

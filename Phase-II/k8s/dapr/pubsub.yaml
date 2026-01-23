@@ -1,0 +1,316 @@
+---
+# Phase V: Dapr Pub/Sub Component (Kafka Backend)
+# Constitutional Compliance: All event publishing MUST use Dapr SDK (NO direct Kafka clients)
+# Component Name: taskflow-pubsub (matches PUBSUB_NAME in config.py)
+
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: taskflow-pubsub
+  namespace: default
+  labels:
+    app: taskflow
+    phase: phase-v
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+  # Kafka broker addresses (in-cluster service)
+  - name: brokers
+    value: "kafka.kafka.svc.cluster.local:9092"
+
+  # Consumer group ID for Dapr subscribers
+  - name: consumerGroup
+    value: "taskflow-consumers"
+
+  # Authentication (disabled for local development)
+  - name: authRequired
+    value: "false"
+
+  # Topic configuration
+  - name: maxMessageBytes
+    value: "1048576"  # 1MB max message size
+
+  # Consumer configuration
+  - name: consumeRetryInterval
+    value: "200ms"
+  - name: consumeRetryEnabled
+    value: "true"
+
+  # Producer configuration
+  - name: producerIdempotent
+    value: "true"  # Enable idempotent producer (exactly-once semantics)
+  - name: producerMaxRetries
+    value: "3"
+
+  # Schema registry (disabled for local development)
+  - name: schemaRegistryURL
+    value: ""
+
+  # Client ID for Dapr
+  - name: clientID
+    value: "dapr-pubsub-client"
+
+  # Version (Kafka protocol version)
+  - name: version
+    value: "2.8.0"
+
+---
+# Phase V: Dapr Pub/Sub Subscriptions
+# Defines which services subscribe to which topics
+
+# Subscription: Recurring Task Processor -> task.created events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: recurring-processor-task-created
+  namespace: default
+  labels:
+    app: recurring-processor
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.created
+  routes:
+    default: /dapr/subscribe/task-created
+  scopes:
+  - recurring-processor
+  metadata:
+    rawPayload: "false"  # Dapr wraps messages in CloudEvent format
+
+---
+# Subscription: Recurring Task Processor -> task.updated events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: recurring-processor-task-updated
+  namespace: default
+  labels:
+    app: recurring-processor
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.updated
+  routes:
+    default: /dapr/subscribe/task-updated
+  scopes:
+  - recurring-processor
+  metadata:
+    rawPayload: "false"
+
+---
+# Subscription: Reminder Service -> task.created events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: reminder-service-task-created
+  namespace: default
+  labels:
+    app: reminder-service
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.created
+  routes:
+    default: /dapr/subscribe/task-created
+  scopes:
+  - reminder-service
+  metadata:
+    rawPayload: "false"
+
+---
+# Subscription: Reminder Service -> task.updated events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: reminder-service-task-updated
+  namespace: default
+  labels:
+    app: reminder-service
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.updated
+  routes:
+    default: /dapr/subscribe/task-updated
+  scopes:
+  - reminder-service
+  metadata:
+    rawPayload: "false"
+
+---
+# Subscription: Reminder Service -> task.deleted events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: reminder-service-task-deleted
+  namespace: default
+  labels:
+    app: reminder-service
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.deleted
+  routes:
+    default: /dapr/subscribe/task-deleted
+  scopes:
+  - reminder-service
+  metadata:
+    rawPayload: "false"
+
+---
+# Subscription: Notification Service -> task.created events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: notification-service-task-created
+  namespace: default
+  labels:
+    app: notification-service
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.created
+  routes:
+    default: /dapr/subscribe/task-created
+  scopes:
+  - notification-service
+  metadata:
+    rawPayload: "false"
+
+---
+# Subscription: Notification Service -> task.updated events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: notification-service-task-updated
+  namespace: default
+  labels:
+    app: notification-service
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.updated
+  routes:
+    default: /dapr/subscribe/task-updated
+  scopes:
+  - notification-service
+  metadata:
+    rawPayload: "false"
+
+---
+# Subscription: Notification Service -> task.completed events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: notification-service-task-completed
+  namespace: default
+  labels:
+    app: notification-service
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.completed
+  routes:
+    default: /dapr/subscribe/task-completed
+  scopes:
+  - notification-service
+  metadata:
+    rawPayload: "false"
+
+---
+# Subscription: Notification Service -> reminder-triggered events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: notification-service-reminder-triggered
+  namespace: default
+  labels:
+    app: notification-service
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.reminder-triggered
+  routes:
+    default: /dapr/subscribe/reminder-triggered
+  scopes:
+  - notification-service
+  metadata:
+    rawPayload: "false"
+
+---
+# Subscription: Audit Logger -> ALL task events
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: audit-logger-task-created
+  namespace: default
+  labels:
+    app: audit-logger
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.created
+  routes:
+    default: /dapr/subscribe/task-created
+  scopes:
+  - audit-logger
+  metadata:
+    rawPayload: "false"
+
+---
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: audit-logger-task-updated
+  namespace: default
+  labels:
+    app: audit-logger
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.updated
+  routes:
+    default: /dapr/subscribe/task-updated
+  scopes:
+  - audit-logger
+  metadata:
+    rawPayload: "false"
+
+---
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: audit-logger-task-completed
+  namespace: default
+  labels:
+    app: audit-logger
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.completed
+  routes:
+    default: /dapr/subscribe/task-completed
+  scopes:
+  - audit-logger
+  metadata:
+    rawPayload: "false"
+
+---
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: audit-logger-task-deleted
+  namespace: default
+  labels:
+    app: audit-logger
+    phase: phase-v
+spec:
+  pubsubname: taskflow-pubsub
+  topic: taskflow.tasks.deleted
+  routes:
+    default: /dapr/subscribe/task-deleted
+  scopes:
+  - audit-logger
+  metadata:
+    rawPayload: "false"
