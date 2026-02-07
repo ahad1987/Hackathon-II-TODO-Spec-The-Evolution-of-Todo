@@ -70,7 +70,7 @@ spec:
     spec:
       containers:
       - name: audit-logger
-        image: audit-logger:latest
+        image: phase-ii-audit-logger:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8004

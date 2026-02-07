@@ -140,11 +140,12 @@ async def root():
 
 
 # Import and include API routes
-from src.api import auth, tasks, health
+from src.api import auth, tasks, health, monitoring
 
 app.include_router(health.router, prefix="", tags=["Health"])  # Phase V: Kubernetes probes
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
+app.include_router(monitoring.router, prefix="/api/v1", tags=["Monitoring"])  # Phase V: Kafka & Dapr monitoring
 
 # Import chat router with error handling
 try:

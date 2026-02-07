@@ -5,7 +5,7 @@ Handles user signup, login, logout, and current user retrieval.
 
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import get_settings
@@ -29,6 +29,7 @@ async def get_user_service(session: AsyncSession = Depends(get_session)) -> User
 @router.post("/signup", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def signup(
     user_data: UserCreate,
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -71,6 +72,17 @@ async def signup(
     logger.info("Creating JWT token...")
     token = UserService.create_jwt_token(user.id, user.email)
 
+    # Set secure cookie with token
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        httponly=True,
+        max_age=86400,
+        samesite="none",
+        secure=False,  # Set to True in production with HTTPS
+        path="/"
+    )
+
     logger.info(f"User signed up successfully: {user.email}")
     return {
         "user": {
@@ -86,6 +98,7 @@ async def signup(
 @router.post("/login", response_model=dict)
 async def login(
     user_data: UserLogin,
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -121,6 +134,19 @@ async def login(
 
     # Create JWT token
     token = UserService.create_jwt_token(user.id, user.email)
+
+    # Set secure cookie with token
+    # SameSite=None for cross-origin (local dev with different ports)
+    # Secure=False for local HTTP testing (should be True in production with HTTPS)
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        httponly=True,  # Prevent JavaScript access
+        max_age=86400,  # 24 hours
+        samesite="none",  # Allow cross-origin cookies
+        secure=False,  # Set to True in production with HTTPS
+        path="/"
+    )
 
     logger.info(f"User logged in: {user.email}")
     return {

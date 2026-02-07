@@ -1,7 +1,7 @@
 ---
-# Phase V: Dapr Pub/Sub Component (Kafka Backend)
-# Constitutional Compliance: All event publishing MUST use Dapr SDK (NO direct Kafka clients)
-# Component Name: taskflow-pubsub (matches PUBSUB_NAME in config.py)
+# Phase V: Dapr Pub/Sub Component - SUBSCRIBERS ONLY
+# Services that SUBSCRIBE to Kafka events (with consumer group initialization)
+# Scoped to: recurring-processor, reminder-service, notification-service, audit-logger
 
 apiVersion: dapr.io/v1alpha1
 kind: Component
@@ -11,13 +11,14 @@ metadata:
   labels:
     app: taskflow
     phase: phase-v
+    role: subscriber
 spec:
   type: pubsub.kafka
   version: v1
   metadata:
-  # Kafka broker addresses (in-cluster service)
+  # Kafka broker addresses (docker-compose service DNS)
   - name: brokers
-    value: "kafka.kafka.svc.cluster.local:9092"
+    value: "kafka:29092"
 
   # Consumer group ID for Dapr subscribers
   - name: consumerGroup
@@ -43,21 +44,75 @@ spec:
   - name: producerMaxRetries
     value: "3"
 
-  # Schema registry (disabled for local development)
-  - name: schemaRegistryURL
-    value: ""
-
   # Client ID for Dapr
   - name: clientID
-    value: "dapr-pubsub-client"
+    value: "dapr-pubsub-subscribers"
 
   # Version (Kafka protocol version)
   - name: version
     value: "2.8.0"
+# Component Scoping: ONLY services that subscribe to events
+# Prevents backend from initializing Kafka consumers
+scopes:
+- recurring-processor
+- reminder-service
+- notification-service
+- audit-logger
+
+---
+# Phase V: Dapr Pub/Sub Component - BACKEND PUBLISHER ONLY
+# Backend publishes events but does NOT subscribe (NO consumer group initialization)
+# This prevents "kafka: tried to use a consumer group that was closed" errors
+
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: taskflow-pubsub-publisher
+  namespace: default
+  labels:
+    app: taskflow
+    phase: phase-v
+    role: publisher
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+  # Kafka broker addresses (docker-compose service DNS)
+  - name: brokers
+    value: "kafka:29092"
+
+  # NO consumerGroup - backend does NOT subscribe to any events
+
+  # Authentication (disabled for local development)
+  - name: authRequired
+    value: "false"
+
+  # Topic configuration
+  - name: maxMessageBytes
+    value: "1048576"  # 1MB max message size
+
+  # Producer configuration (publishing only)
+  - name: producerIdempotent
+    value: "true"  # Enable idempotent producer (exactly-once semantics)
+  - name: producerMaxRetries
+    value: "3"
+
+  # Client ID for Dapr
+  - name: clientID
+    value: "dapr-pubsub-backend-publisher"
+
+  # Version (Kafka protocol version)
+  - name: version
+    value: "2.8.0"
+# Component Scoping: ONLY backend (publish-only, no subscriptions)
+scopes:
+- backend
+- chat-api
 
 ---
 # Phase V: Dapr Pub/Sub Subscriptions
 # Defines which services subscribe to which topics
+# All subscriptions reference "taskflow-pubsub" (the subscriber component)
 
 # Subscription: Recurring Task Processor -> task.created events
 apiVersion: dapr.io/v2alpha1
@@ -73,8 +128,6 @@ spec:
   topic: taskflow.tasks.created
   routes:
     default: /dapr/subscribe/task-created
-  scopes:
-  - recurring-processor
   metadata:
     rawPayload: "false"  # Dapr wraps messages in CloudEvent format
 
@@ -93,8 +146,6 @@ spec:
   topic: taskflow.tasks.updated
   routes:
     default: /dapr/subscribe/task-updated
-  scopes:
-  - recurring-processor
   metadata:
     rawPayload: "false"
 
@@ -113,8 +164,6 @@ spec:
   topic: taskflow.tasks.created
   routes:
     default: /dapr/subscribe/task-created
-  scopes:
-  - reminder-service
   metadata:
     rawPayload: "false"
 
@@ -133,8 +182,6 @@ spec:
   topic: taskflow.tasks.updated
   routes:
     default: /dapr/subscribe/task-updated
-  scopes:
-  - reminder-service
   metadata:
     rawPayload: "false"
 
@@ -153,8 +200,6 @@ spec:
   topic: taskflow.tasks.deleted
   routes:
     default: /dapr/subscribe/task-deleted
-  scopes:
-  - reminder-service
   metadata:
     rawPayload: "false"
 
@@ -173,8 +218,6 @@ spec:
   topic: taskflow.tasks.created
   routes:
     default: /dapr/subscribe/task-created
-  scopes:
-  - notification-service
   metadata:
     rawPayload: "false"
 
@@ -193,8 +236,6 @@ spec:
   topic: taskflow.tasks.updated
   routes:
     default: /dapr/subscribe/task-updated
-  scopes:
-  - notification-service
   metadata:
     rawPayload: "false"
 
@@ -213,8 +254,6 @@ spec:
   topic: taskflow.tasks.completed
   routes:
     default: /dapr/subscribe/task-completed
-  scopes:
-  - notification-service
   metadata:
     rawPayload: "false"
 
@@ -233,8 +272,6 @@ spec:
   topic: taskflow.tasks.reminder-triggered
   routes:
     default: /dapr/subscribe/reminder-triggered
-  scopes:
-  - notification-service
   metadata:
     rawPayload: "false"
 
@@ -253,8 +290,6 @@ spec:
   topic: taskflow.tasks.created
   routes:
     default: /dapr/subscribe/task-created
-  scopes:
-  - audit-logger
   metadata:
     rawPayload: "false"
 
@@ -272,8 +307,6 @@ spec:
   topic: taskflow.tasks.updated
   routes:
     default: /dapr/subscribe/task-updated
-  scopes:
-  - audit-logger
   metadata:
     rawPayload: "false"
 
@@ -291,8 +324,6 @@ spec:
   topic: taskflow.tasks.completed
   routes:
     default: /dapr/subscribe/task-completed
-  scopes:
-  - audit-logger
   metadata:
     rawPayload: "false"
 
@@ -310,7 +341,5 @@ spec:
   topic: taskflow.tasks.deleted
   routes:
     default: /dapr/subscribe/task-deleted
-  scopes:
-  - audit-logger
   metadata:
     rawPayload: "false"

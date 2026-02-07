@@ -1,0 +1,137 @@
+name: Deploy - Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version tag to deploy'
+        required: true
+        default: 'latest'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          kubectl config use-context ${{ secrets.KUBE_CONTEXT }}
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace taskflow-${{ github.event.inputs.environment }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy infrastructure (Postgres, Kafka, Redis)
+        run: |
+          kubectl apply -f k8s/infrastructure/ -n taskflow-${{ github.event.inputs.environment }}
+
+      - name: Deploy Dapr components
+        run: |
+          kubectl apply -f k8s/dapr/ -n taskflow-${{ github.event.inputs.environment }}
+
+      - name: Wait for infrastructure
+        run: |
+          kubectl wait --for=condition=ready pod -l app=postgres -n taskflow-${{ github.event.inputs.environment }} --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=kafka -n taskflow-${{ github.event.inputs.environment }} --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=redis -n taskflow-${{ github.event.inputs.environment }} --timeout=300s
+
+      - name: Update image tags
+        run: |
+          # Update deployment manifests with new image versions
+          sed -i "s|image: .*-backend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ github.event.inputs.version }}|g" k8s/services/backend.yaml
+          sed -i "s|image: .*-frontend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-frontend:${{ github.event.inputs.version }}|g" k8s/services/frontend.yaml
+          # Update microservices
+          for service in recurring-processor reminder-service notification-service audit-logger; do
+            sed -i "s|image: .*-${service}:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${service}:${{ github.event.inputs.version }}|g" k8s/services/${service}.yaml
+          done
+
+      - name: Deploy services
+        run: |
+          kubectl apply -f k8s/services/ -n taskflow-${{ github.event.inputs.environment }}
+
+      - name: Wait for deployments
+        run: |
+          kubectl rollout status deployment/backend -n taskflow-${{ github.event.inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/frontend -n taskflow-${{ github.event.inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/recurring-processor -n taskflow-${{ github.event.inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/reminder-service -n taskflow-${{ github.event.inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/notification-service -n taskflow-${{ github.event.inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/audit-logger -n taskflow-${{ github.event.inputs.environment }} --timeout=600s
+
+      - name: Verify deployment health
+        run: |
+          # Get backend service URL
+          BACKEND_URL=$(kubectl get svc backend -n taskflow-${{ github.event.inputs.environment }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+          # Wait for service to be ready
+          sleep 30
+
+          # Health checks
+          curl -f http://${BACKEND_URL}:8000/health/live || exit 1
+          curl -f http://${BACKEND_URL}:8000/api/v1/monitoring/overview || exit 1
+
+      - name: Deployment summary
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Namespace:** taskflow-${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Deployed Services:" >> $GITHUB_STEP_SUMMARY
+          kubectl get deployments -n taskflow-${{ github.event.inputs.environment }} -o wide >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Service Endpoints:" >> $GITHUB_STEP_SUMMARY
+          kubectl get services -n taskflow-${{ github.event.inputs.environment }} >> $GITHUB_STEP_SUMMARY
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: failure()
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Rollback deployments
+        run: |
+          kubectl rollout undo deployment/backend -n taskflow-${{ github.event.inputs.environment }}
+          kubectl rollout undo deployment/frontend -n taskflow-${{ github.event.inputs.environment }}
+          kubectl rollout undo deployment/recurring-processor -n taskflow-${{ github.event.inputs.environment }}
+          kubectl rollout undo deployment/reminder-service -n taskflow-${{ github.event.inputs.environment }}
+          kubectl rollout undo deployment/notification-service -n taskflow-${{ github.event.inputs.environment }}
+          kubectl rollout undo deployment/audit-logger -n taskflow-${{ github.event.inputs.environment }}
+
+      - name: Notify rollback
+        run: |
+          echo "::error::Deployment failed - automatic rollback initiated"

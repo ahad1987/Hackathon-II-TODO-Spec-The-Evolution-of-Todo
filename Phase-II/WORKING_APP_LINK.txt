@@ -1,0 +1,21 @@
+TASKFLOW TODO APP - LIVE & WORKING
+===================================
+
+YOUR COMPLETE WORKING APP:
+https://taskflow-ai-chatbot.netlify.app
+
+STATUS: READY (Deploy state: ready)
+
+WHAT YOU CAN DO:
+✓ Sign up with email
+✓ Login to dashboard
+✓ Create new tasks
+✓ View all your tasks
+✓ Complete tasks
+✓ Delete tasks
+✓ Beautiful responsive UI
+✓ Works on all devices
+
+NO SETUP NEEDED - CLICK THE LINK AND USE IT!
+
+https://taskflow-ai-chatbot.netlify.app

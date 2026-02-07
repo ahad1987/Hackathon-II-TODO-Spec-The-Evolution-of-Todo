@@ -9,6 +9,9 @@ Constitutional Compliance:
 
 import logging
 import uuid
+import json
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -16,6 +19,9 @@ from dapr.clients import DaprClient
 from dapr.clients.grpc._response import TopicEventResponse
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for running synchronous Dapr calls without blocking async code
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="dapr-publisher")
 
 
 class DaprEventPublisher:
@@ -96,10 +102,11 @@ class DaprEventPublisher:
             client = self._get_client()
 
             # Publish to Dapr Pub/Sub (NO direct Kafka!)
+            # Serialize dict to JSON string for Dapr SDK
             client.publish_event(
                 pubsub_name=self.pubsub_name,
                 topic_name=topic,
-                data=event_data,
+                data=json.dumps(event_data),
                 data_content_type="application/json"
             )
 
@@ -126,6 +133,38 @@ class DaprEventPublisher:
                 },
                 exc_info=True
             )
+            return False
+
+    async def publish_event_async(
+        self,
+        topic: str,
+        event_type: str,
+        task_id: str,
+        user_id: str,
+        payload: Dict[str, Any],
+        correlation_id: Optional[str] = None
+    ) -> bool:
+        """
+        Async wrapper for publish_event - runs in thread pool to avoid blocking.
+
+        This prevents the synchronous Dapr SDK call from blocking async endpoints.
+        """
+        loop = asyncio.get_event_loop()
+        try:
+            # Run synchronous publish_event in thread pool
+            result = await loop.run_in_executor(
+                _executor,
+                self.publish_event,
+                topic,
+                event_type,
+                task_id,
+                user_id,
+                payload,
+                correlation_id
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Async publish failed: {e}", exc_info=True)
             return False
 
     def publish_task_created(

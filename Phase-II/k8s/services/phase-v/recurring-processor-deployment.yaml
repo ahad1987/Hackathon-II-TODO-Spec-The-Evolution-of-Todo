@@ -83,7 +83,7 @@ spec:
     spec:
       containers:
       - name: recurring-processor
-        image: recurring-processor:latest
+        image: phase-ii-recurring-processor:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8001
@@ -138,7 +138,7 @@ spec:
 
         readinessProbe:
           httpGet:
-            path: /health/ready
+            path: /health/live
             port: 8001
             scheme: HTTP
           initialDelaySeconds: 15

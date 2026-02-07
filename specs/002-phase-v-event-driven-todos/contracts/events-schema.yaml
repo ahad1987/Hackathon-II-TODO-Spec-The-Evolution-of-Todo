@@ -1,0 +1,388 @@
+# Event Schemas for Phase V - Event-Driven Task Management
+
+# This document defines the event schemas for Dapr Pub/Sub communication
+# between services. These are NOT REST API contracts - they are event payloads.
+
+version: "1.0.0"
+events:
+
+  # ============================================================================
+  # Task Events (Producer: Chat API ONLY)
+  # ============================================================================
+
+  task.created:
+    description: Published when a new task is created
+    producer: Chat API (ONLY)
+    consumers:
+      - Notification Service
+      - Reminder Service
+      - Audit Logger
+    topic: taskflow.tasks.created
+    schema:
+      type: object
+      required:
+        - event_type
+        - event_id
+        - timestamp
+        - actor_id
+        - task
+      properties:
+        event_type:
+          type: string
+          const: "task.created"
+        event_id:
+          type: string
+          format: uuid
+          description: Unique event identifier for idempotency
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO8601 timestamp when event occurred (UTC)
+        actor_id:
+          type: string
+          format: uuid
+          description: User ID who created the task
+        task:
+          type: object
+          required:
+            - id
+            - title
+            - status
+          properties:
+            id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            description:
+              type: string
+              nullable: true
+            status:
+              type: string
+              enum: [pending, completed, deleted]
+            due_date:
+              type: string
+              format: date-time
+              nullable: true
+              description: Task due date (ISO8601, UTC)
+            recurrence_pattern:
+              type: string
+              nullable: true
+              description: Recurrence pattern (e.g., daily:, weekly:MON,WED)
+            reminder_offset:
+              type: string
+              nullable: true
+              description: Time before due_date to trigger reminder (e.g., 1 day, 1 hour)
+    example:
+      event_type: "task.created"
+      event_id: "550e8400-e29b-41d4-a716-446655440000"
+      timestamp: "2026-01-22T10:30:00Z"
+      actor_id: "123e4567-e89b-12d3-a456-426614174000"
+      task:
+        id: "789e0123-e89b-12d3-a456-426614174111"
+        title: "Finish Phase V specification"
+        description: "Complete all sections with research and data model"
+        status: "pending"
+        due_date: "2026-01-23T17:00:00Z"
+        recurrence_pattern: null
+        reminder_offset: "1 day"
+
+  task.updated:
+    description: Published when a task is updated
+    producer: Chat API (ONLY)
+    consumers:
+      - Notification Service
+      - Reminder Service
+      - Audit Logger
+    topic: taskflow.tasks.updated
+    schema:
+      type: object
+      required:
+        - event_type
+        - event_id
+        - timestamp
+        - actor_id
+        - task_id
+        - changes
+      properties:
+        event_type:
+          type: string
+          const: "task.updated"
+        event_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        actor_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+          description: ID of the updated task
+        changes:
+          type: object
+          description: Map of changed fields with old/new values
+          additionalProperties:
+            type: object
+            required:
+              - old
+              - new
+            properties:
+              old:
+                description: Previous value
+              new:
+                description: New value
+    example:
+      event_type: "task.updated"
+      event_id: "660e9411-f30c-52e5-b827-557766551111"
+      timestamp: "2026-01-22T11:00:00Z"
+      actor_id: "123e4567-e89b-12d3-a456-426614174000"
+      task_id: "789e0123-e89b-12d3-a456-426614174111"
+      changes:
+        due_date:
+          old: "2026-01-23T17:00:00Z"
+          new: "2026-01-24T17:00:00Z"
+        reminder_offset:
+          old: "1 day"
+          new: "2 hours"
+
+  task.completed:
+    description: Published when a task is marked as completed
+    producer: Chat API (ONLY)
+    consumers:
+      - Notification Service
+      - Audit Logger
+    topic: taskflow.tasks.completed
+    schema:
+      type: object
+      required:
+        - event_type
+        - event_id
+        - timestamp
+        - actor_id
+        - task_id
+        - completed_at
+      properties:
+        event_type:
+          type: string
+          const: "task.completed"
+        event_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        actor_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        completed_at:
+          type: string
+          format: date-time
+          description: When task was completed (ISO8601, UTC)
+    example:
+      event_type: "task.completed"
+      event_id: "770ea522-g41d-63f6-c938-668877662222"
+      timestamp: "2026-01-22T12:00:00Z"
+      actor_id: "123e4567-e89b-12d3-a456-426614174000"
+      task_id: "789e0123-e89b-12d3-a456-426614174111"
+      completed_at: "2026-01-22T12:00:00Z"
+
+  task.deleted:
+    description: Published when a task is deleted
+    producer: Chat API (ONLY)
+    consumers:
+      - Notification Service
+      - Reminder Service
+      - Audit Logger
+    topic: taskflow.tasks.deleted
+    schema:
+      type: object
+      required:
+        - event_type
+        - event_id
+        - timestamp
+        - actor_id
+        - task_id
+      properties:
+        event_type:
+          type: string
+          const: "task.deleted"
+        event_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        actor_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+    example:
+      event_type: "task.deleted"
+      event_id: "880fb633-h52e-74g7-d049-779988773333"
+      timestamp: "2026-01-22T13:00:00Z"
+      actor_id: "123e4567-e89b-12d3-a456-426614174000"
+      task_id: "789e0123-e89b-12d3-a456-426614174111"
+
+  # ============================================================================
+  # Reminder Events (Producer: Reminder Service)
+  # ============================================================================
+
+  task.reminder.triggered:
+    description: Published when a reminder is triggered
+    producer: Reminder Service
+    consumers:
+      - Notification Service
+    topic: taskflow.tasks.reminder-triggered
+    schema:
+      type: object
+      required:
+        - event_type
+        - event_id
+        - timestamp
+        - task_id
+        - user_id
+        - reminder_type
+        - due_date
+      properties:
+        event_type:
+          type: string
+          const: "task.reminder.triggered"
+        event_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        task_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          description: User to notify
+        reminder_type:
+          type: string
+          enum: [due_date_reminder]
+        due_date:
+          type: string
+          format: date-time
+          description: Task due date (ISO8601, UTC)
+        offset_triggered:
+          type: string
+          description: Reminder offset that triggered (e.g., "1 day", "1 hour")
+    example:
+      event_type: "task.reminder.triggered"
+      event_id: "990gc744-i63f-85h8-e150-880099884444"
+      timestamp: "2026-01-22T16:00:00Z"
+      task_id: "789e0123-e89b-12d3-a456-426614174111"
+      user_id: "123e4567-e89b-12d3-a456-426614174000"
+      reminder_type: "due_date_reminder"
+      due_date: "2026-01-23T17:00:00Z"
+      offset_triggered: "1 day"
+
+# ============================================================================
+# Dapr Pub/Sub Configuration Reference
+# ============================================================================
+
+dapr_topics:
+  - name: taskflow.tasks.created
+    description: Task creation events
+    scopes:
+      publishers:
+        - chat-api
+      subscribers:
+        - notification-service
+        - reminder-service
+        - audit-logger
+
+  - name: taskflow.tasks.updated
+    description: Task update events
+    scopes:
+      publishers:
+        - chat-api
+      subscribers:
+        - notification-service
+        - reminder-service
+        - audit-logger
+
+  - name: taskflow.tasks.completed
+    description: Task completion events
+    scopes:
+      publishers:
+        - chat-api
+      subscribers:
+        - notification-service
+        - audit-logger
+
+  - name: taskflow.tasks.deleted
+    description: Task deletion events
+    scopes:
+      publishers:
+        - chat-api
+      subscribers:
+        - notification-service
+        - reminder-service
+        - audit-logger
+
+  - name: taskflow.tasks.reminder-triggered
+    description: Reminder trigger events
+    scopes:
+      publishers:
+        - reminder-service
+      subscribers:
+        - notification-service
+
+# ============================================================================
+# Event Delivery Guarantees
+# ============================================================================
+
+delivery_semantics:
+  guarantee: at-least-once
+  rationale: |
+    Dapr with Kafka provides at-least-once delivery. Services must implement
+    idempotency using event_id to handle potential duplicate deliveries.
+
+idempotency_strategy:
+  - All events include unique event_id (UUID)
+  - Services track processed event_ids to detect duplicates
+  - Database operations use upsert or check-and-insert patterns
+
+retry_policy:
+  max_attempts: 3
+  backoff: exponential
+  initial_delay: 1s
+  max_delay: 60s
+  dead_letter_topic: taskflow.dlq
+
+# ============================================================================
+# Event Ordering Guarantees
+# ============================================================================
+
+ordering:
+  guarantee: per-partition
+  partition_key: task_id
+  rationale: |
+    Events for the same task_id are routed to the same Kafka partition,
+    ensuring ordered delivery within that task's event stream.
+
+# ============================================================================
+# Schema Evolution Policy
+# ============================================================================
+
+versioning:
+  strategy: additive-only
+  rules:
+    - New optional fields may be added to event payloads
+    - Required fields MUST NOT be removed or changed
+    - Field types MUST NOT change
+    - Event type names are immutable
+  breaking_changes:
+    policy: Create new event type with version suffix (e.g., task.created.v2)

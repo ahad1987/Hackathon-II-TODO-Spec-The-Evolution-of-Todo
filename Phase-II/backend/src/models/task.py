@@ -87,6 +87,10 @@ class Task(SQLModel, table=True):
         default=None,
         description="Task due date/time"
     )
+    priority: str = Field(
+        default="medium",
+        description="Task priority (low, medium, high)"
+    )
     reminder_offset: Optional[str] = Field(
         default=None,
         description="Reminder offset interval (e.g., '1 hour', '30 minutes', '1 day')"
@@ -144,6 +148,10 @@ class TaskCreate(SQLModel):
         default=None,
         description="Task due date/time"
     )
+    priority: str = Field(
+        default="medium",
+        description="Task priority (low, medium, high)"
+    )
     reminder_offset: Optional[str] = Field(
         default=None,
         description="Reminder offset interval (e.g., '1 hour', '30 minutes', '1 day')"
@@ -187,6 +195,10 @@ class TaskUpdate(SQLModel):
         default=None,
         description="Task due date/time"
     )
+    priority: Optional[str] = Field(
+        default=None,
+        description="Task priority (low, medium, high)"
+    )
     reminder_offset: Optional[str] = Field(
         default=None,
         description="Reminder offset interval"
@@ -212,6 +224,7 @@ class TaskResponse(TaskBase):
 
     # Phase V: Due date and reminder fields
     due_date: Optional[datetime] = Field(default=None, description="Due date")
+    priority: str = Field(default="medium", description="Task priority")
     reminder_offset: Optional[str] = Field(default=None, description="Reminder offset")
     reminder_status: Optional[str] = Field(default=None, description="Reminder status")
 
@@ -240,6 +253,7 @@ class TaskListResponse(SQLModel):
 
     # Phase V: Due date and reminder fields
     due_date: Optional[datetime] = None
+    priority: str = "medium"
     reminder_offset: Optional[str] = None
     reminder_status: Optional[str] = None
 

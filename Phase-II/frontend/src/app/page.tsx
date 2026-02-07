@@ -44,7 +44,7 @@ export default function HomePage() {
           <h1 className="text-5xl sm:text-6xl font-bold text-slate-900 mb-6 leading-tight">
             Manage Tasks with{' '}
             <span className="bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">
-              AI Intelligence
+              AI 
             </span>
           </h1>
           <p className="text-xl text-slate-600 mb-8">

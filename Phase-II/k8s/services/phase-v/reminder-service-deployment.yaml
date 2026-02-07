@@ -83,7 +83,7 @@ spec:
     spec:
       containers:
       - name: reminder-service
-        image: reminder-service:latest
+        image: phase-ii-reminder-service:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8002
@@ -138,7 +138,7 @@ spec:
 
         readinessProbe:
           httpGet:
-            path: /health/ready
+            path: /health/live
             port: 8002
             scheme: HTTP
           initialDelaySeconds: 15

@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { Qp as TasksAPI, TASKS_REFRESH_EVENT } from '@/services/api';
+import MonitoringPanel from '@/components/monitoring/MonitoringPanel';
 
 interface Task {
   id: string;
   title: string;
   description?: string;
   completed: boolean;
+  priority: string;
+  due_date?: string;
   created_at: string;
 }
 
@@ -24,6 +27,8 @@ function CreateTaskForm({ onTaskCreated }: { onTaskCreated?: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState<string>('medium');
+  const [dueDate, setDueDate] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,9 +45,13 @@ function CreateTaskForm({ onTaskCreated }: { onTaskCreated?: () => void }) {
       await TasksAPI.createTask({
         title: title.trim(),
         description: description.trim() || undefined,
+        priority,
+        due_date: dueDate || undefined,
       });
       setTitle('');
       setDescription('');
+      setPriority('medium');
+      setDueDate('');
       setIsOpen(false);
       onTaskCreated?.();
     } catch (err) {
@@ -55,6 +64,8 @@ function CreateTaskForm({ onTaskCreated }: { onTaskCreated?: () => void }) {
   const handleCancel = () => {
     setTitle('');
     setDescription('');
+    setPriority('medium');
+    setDueDate('');
     setError(null);
     setIsOpen(false);
   };
@@ -130,6 +141,39 @@ function CreateTaskForm({ onTaskCreated }: { onTaskCreated?: () => void }) {
           <p className="mt-1 text-xs text-slate-500">{description.length}/5000 characters</p>
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label htmlFor="priority" className="block text-sm font-semibold text-slate-900 mb-2">
+              Priority
+            </label>
+            <select
+              id="priority"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              disabled={isSubmitting}
+              className="input-field"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="dueDate" className="block text-sm font-semibold text-slate-900 mb-2">
+              Due Date <span className="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <input
+              id="dueDate"
+              type="datetime-local"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              disabled={isSubmitting}
+              className="input-field"
+            />
+          </div>
+        </div>
+
         <div className="flex gap-3 pt-2">
           <button
             type="submit"
@@ -171,6 +215,8 @@ function TaskCard({
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || '');
+  const [priority, setPriority] = useState(task.priority);
+  const [dueDate, setDueDate] = useState(task.due_date || '');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,6 +245,8 @@ function TaskCard({
       const updated = await TasksAPI.updateTask(task.id, {
         title: title.trim(),
         description: description.trim() || null,
+        priority,
+        due_date: dueDate || null,
       });
       onUpdated?.(updated);
       setIsEditing(false);
@@ -248,6 +296,29 @@ function TaskCard({
               rows={3}
               className="input-field resize-none"
             />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-sm font-semibold text-slate-900 mb-2">Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                className="input-field"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-900 mb-2">Due Date</label>
+              <input
+                type="datetime-local"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="input-field"
+              />
+            </div>
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={handleSave} className="btn-primary font-semibold py-2.5">
@@ -310,7 +381,36 @@ function TaskCard({
                 {task.description}
               </p>
             )}
-            <p className="mt-3 text-xs text-slate-500">
+            <div className="mt-3 flex flex-wrap gap-2 items-center">
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  task.priority === 'high'
+                    ? 'bg-red-100 text-red-800'
+                    : task.priority === 'medium'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-green-100 text-green-800'
+                }`}
+              >
+                {task.priority.toUpperCase()}
+              </span>
+              {task.due_date && (
+                <span className="inline-flex items-center text-xs text-slate-600">
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Due: {new Date(task.due_date).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })} at{' '}
+                  {new Date(task.due_date).toLocaleTimeString(undefined, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
               Created{' '}
               {new Date(task.created_at).toLocaleDateString(undefined, {
                 month: 'short',
@@ -563,94 +663,106 @@ export default function TasksPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">Your Tasks</h1>
           <p className="text-slate-600">Organize, prioritize, and accomplish your goals</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="card p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 mb-1">Total Tasks</p>
-                <div className="text-4xl font-bold text-slate-900">{stats.total}</div>
+        <div className="flex gap-6">
+          {/* Main Content Area */}
+          <div className="flex-1 min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+              <div className="card p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 mb-1">Total Tasks</p>
+                    <div className="text-4xl font-bold text-slate-900">{stats.total}</div>
+                  </div>
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                      />
+                    </svg>
+                  </div>
+                </div>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
+
+              <div className="card p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 mb-1">Completed</p>
+                    <div className="text-4xl font-bold text-green-600">{stats.completed}</div>
+                    {stats.total > 0 && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        {Math.round((stats.completed / stats.total) * 100)}% done
+                      </p>
+                    )}
+                  </div>
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                </div>
               </div>
+
+              <div className="card p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 mb-1">Pending</p>
+                    <div className="text-4xl font-bold text-amber-600">{stats.pending}</div>
+                    {stats.total > 0 && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        {Math.round((stats.pending / stats.total) * 100)}% remaining
+                      </p>
+                    )}
+                  </div>
+                  <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-slate-900">Tasks</h2>
+              </div>
+              <CreateTaskForm
+                onTaskCreated={() => {
+                  setRefreshKey((k) => k + 1);
+                }}
+              />
+            </div>
+
+            <div className="card p-6 sm:p-8 shadow-sm">
+              <TaskList key={refreshKey} onTasksLoaded={updateStats} />
             </div>
           </div>
 
-          <div className="card p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 mb-1">Completed</p>
-                <div className="text-4xl font-bold text-green-600">{stats.completed}</div>
-                {stats.total > 0 && (
-                  <p className="text-xs text-slate-500 mt-1">
-                    {Math.round((stats.completed / stats.total) * 100)}% done
-                  </p>
-                )}
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
+          {/* Right Sidebar - Monitoring Panel */}
+          <aside className="hidden xl:block w-96 flex-shrink-0">
+            <div className="sticky top-24">
+              <MonitoringPanel />
             </div>
-          </div>
-
-          <div className="card p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 mb-1">Pending</p>
-                <div className="text-4xl font-bold text-amber-600">{stats.pending}</div>
-                {stats.total > 0 && (
-                  <p className="text-xs text-slate-500 mt-1">
-                    {Math.round((stats.pending / stats.total) * 100)}% remaining
-                  </p>
-                )}
-              </div>
-              <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-slate-900">Tasks</h2>
-          </div>
-          <CreateTaskForm
-            onTaskCreated={() => {
-              setRefreshKey((k) => k + 1);
-            }}
-          />
-        </div>
-
-        <div className="card p-6 sm:p-8 shadow-sm">
-          <TaskList key={refreshKey} onTasksLoaded={updateStats} />
+          </aside>
         </div>
       </main>
     </div>

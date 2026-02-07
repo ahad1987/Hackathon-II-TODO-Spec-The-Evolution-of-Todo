@@ -32,12 +32,19 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: taskflow-kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     ports:
       - "9092:9092"
     environment:
@@ -48,6 +55,12 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
 
   redis:
     image: redis:7-alpine
@@ -89,11 +102,18 @@ services:
       REDIS_URL: redis://redis:6379
       DAPR_HTTP_PORT: 3500
       DAPR_GRPC_PORT: 50001
-      PUBSUB_NAME: taskflow-pubsub
+      PUBSUB_NAME: taskflow-pubsub-publisher
       JWT_SECRET_KEY: dev-secret-key-change-in-production
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     volumes:
       - ./backend/src:/app/src
+      - ./.github:/app/.github:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   backend-dapr:
@@ -109,11 +129,16 @@ services:
       "-components-path", "/components"
     ]
     depends_on:
-      - backend
-      - dapr-placement
+      backend:
+        condition: service_started
+      dapr-placement:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     network_mode: "service:backend"
     volumes:
       - ./k8s/dapr:/components
+    restart: on-failure
 
   # Recurring Task Processor
   recurring-processor:
@@ -150,11 +175,16 @@ services:
       "-components-path", "/components"
     ]
     depends_on:
-      - recurring-processor
-      - dapr-placement
+      recurring-processor:
+        condition: service_started
+      dapr-placement:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     network_mode: "service:recurring-processor"
     volumes:
       - ./k8s/dapr:/components
+    restart: on-failure
 
   # Reminder Service
   reminder-service:
@@ -193,11 +223,16 @@ services:
       "-components-path", "/components"
     ]
     depends_on:
-      - reminder-service
-      - dapr-placement
+      reminder-service:
+        condition: service_started
+      dapr-placement:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     network_mode: "service:reminder-service"
     volumes:
       - ./k8s/dapr:/components
+    restart: on-failure
 
   # Notification Service
   notification-service:
@@ -231,11 +266,16 @@ services:
       "-components-path", "/components"
     ]
     depends_on:
-      - notification-service
-      - dapr-placement
+      notification-service:
+        condition: service_started
+      dapr-placement:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     network_mode: "service:notification-service"
     volumes:
       - ./k8s/dapr:/components
+    restart: on-failure
 
   # Audit Logger Service
   audit-logger:
@@ -272,14 +312,36 @@ services:
       "-components-path", "/components"
     ]
     depends_on:
-      - audit-logger
-      - dapr-placement
+      audit-logger:
+        condition: service_started
+      dapr-placement:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     network_mode: "service:audit-logger"
     volumes:
       - ./k8s/dapr:/components
+    restart: on-failure
+
+  # ========== Frontend Service ==========
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskflow-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NODE_ENV: production
+    depends_on:
+      - backend
+    networks:
+      - default
 
   # ========== Monitoring Services (Optional) ==========
-  
+
   zipkin:
     image: openzipkin/zipkin:latest
     container_name: taskflow-zipkin

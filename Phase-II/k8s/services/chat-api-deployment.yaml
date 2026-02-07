@@ -22,10 +22,10 @@ data:
   DAPR_ENABLED: "true"
   DAPR_HTTP_PORT: "3500"
   DAPR_GRPC_PORT: "50001"
-  PUBSUB_NAME: "taskflow-pubsub"
+  PUBSUB_NAME: "taskflow-pubsub-publisher"
 
-  # CORS configuration
-  CORS_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:5173,https://mytodoappv2.vercel.app,https://stately-dieffenbachia-b565a9.netlify.app,https://taskflow-ai-chatbot.vercel.app"
+  # CORS configuration (stable localhost URLs for Minikube tunnel)
+  CORS_ORIGINS: "http://127.0.0.1:3000,http://localhost:3000,https://mytodoappv2.vercel.app,https://stately-dieffenbachia-b565a9.netlify.app,https://taskflow-ai-chatbot.vercel.app"
 
 ---
 # Secret for sensitive configuration (JWT secret, database credentials)
@@ -102,7 +102,7 @@ spec:
     spec:
       containers:
       - name: chat-api
-        image: chat-api:latest  # Replace with actual image registry/tag
+        image: phase-ii-backend:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -172,6 +172,16 @@ spec:
             secretKeyRef:
               name: chat-api-secrets
               key: DATABASE_URL
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: taskflow-anthropic-secret
+              key: ANTHROPIC_API_KEY
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: taskflow-redis-secret
+              key: REDIS_URL
 
         resources:
           requests:
@@ -196,7 +206,7 @@ spec:
         # Phase V: Readiness probe (dependency health check)
         readinessProbe:
           httpGet:
-            path: /health/ready
+            path: /health/live
             port: 8000
             scheme: HTTP
           initialDelaySeconds: 15

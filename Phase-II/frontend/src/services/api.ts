@@ -21,12 +21,20 @@ export class ApiError extends Error {
 
 // Cookie helpers
 export const saveToken = (token: string): void => {
+  if (typeof document === 'undefined') {
+    return;
+  }
   const expires = new Date();
   expires.setHours(expires.getHours() + 24);
-  document.cookie = `auth_token=${encodeURIComponent(token)}; path=/; expires=${expires.toUTCString()}`;
+  document.cookie = `auth_token=${encodeURIComponent(token)}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
 };
 
 export const getToken = (): string | null => {
+  // Safety check for SSR (document doesn't exist on server)
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
   for (const cookie of document.cookie.split(';')) {
     const [name, value] = cookie.trim().split('=');
     if (name === 'auth_token' && value) {
@@ -37,15 +45,18 @@ export const getToken = (): string | null => {
 };
 
 export const clearToken = (): void => {
-  document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  if (typeof document === 'undefined') {
+    return;
+  }
+  document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax';
 };
 
 // Create API client with interceptors
 const createApiClient = (): AxiosInstance => {
   const client = axios.create({
-    baseURL: API_URL,
+    baseURL: API_URL + '/api/v1',  // Full API path
     timeout: 30000,
-    withCredentials: true,
+    withCredentials: true,  // CRITICAL: Send cookies with requests
     headers: {
       'Content-Type': 'application/json',
     },
@@ -127,13 +138,13 @@ export function dispatchTasksRefreshEvent(): void {
 export const iJ = {
   signup: async (email: string, password: string) => {
     const client = getApiClient();
-    const response = await client.post('/api/v1/auth/signup', { email, password });
+    const response = await client.post('/auth/signup', { email, password });
     if (response.data.token) saveToken(response.data.token);
     return response.data;
   },
   login: async (email: string, password: string) => {
     const client = getApiClient();
-    const response = await client.post('/api/v1/auth/login', { email, password });
+    const response = await client.post('/auth/login', { email, password });
     if (response.data.token) {
       saveToken(response.data.token);
     }
@@ -141,11 +152,11 @@ export const iJ = {
   },
   logout: async () => {
     const client = getApiClient();
-    return (await client.post('/api/v1/auth/logout')).data;
+    return (await client.post('/auth/logout')).data;
   },
   getMe: async () => {
     const client = getApiClient();
-    return (await client.get('/api/v1/auth/me')).data;
+    return (await client.get('/auth/me')).data;
   },
 };
 
@@ -153,19 +164,19 @@ export const iJ = {
 export const Qp = {
   listTasks: async () => {
     const client = getApiClient();
-    return (await client.get('/api/v1/tasks')).data;
+    return (await client.get('/tasks')).data;
   },
-  createTask: async (data: { title: string; description?: string }) => {
+  createTask: async (data: { title: string; description?: string; priority?: string; due_date?: string }) => {
     const client = getApiClient();
-    return (await client.post('/api/v1/tasks', data)).data;
+    return (await client.post('/tasks', data)).data;
   },
   updateTask: async (id: string, data: Record<string, unknown>) => {
     const client = getApiClient();
-    return (await client.put(`/api/v1/tasks/${id}`, data)).data;
+    return (await client.put(`/tasks/${id}`, data)).data;
   },
   deleteTask: async (id: string) => {
     const client = getApiClient();
-    return (await client.delete(`/api/v1/tasks/${id}`)).data;
+    return (await client.delete(`/tasks/${id}`)).data;
   },
 };
 
@@ -186,8 +197,8 @@ export class ChatService {
   ): Promise<ChatResponse> {
     try {
       const client = getApiClient();
-      // CORRECT URL: /api/v1/chat (user_id from JWT, not URL)
-      const response = await client.post('/api/v1/chat', {
+      // CORRECT URL: /chat (baseURL already has /api/v1)
+      const response = await client.post('/chat', {
         conversation_id: conversationId || undefined,
         message,
       });
@@ -220,3 +231,146 @@ export class ChatService {
 
 // Export ChatService as 'a' for compatibility with built code
 export const a = ChatService;
+
+// Monitoring API - Phase V
+export interface KafkaStatus {
+  timestamp: string;
+  broker: {
+    host: string;
+    status: string;
+    connected: boolean;
+  };
+  topics: Array<{
+    name: string;
+    partitions: number | null;
+    status: string;
+  }>;
+  error: string | null;
+}
+
+export interface DaprSidecar {
+  name: string;
+  host: string;
+  port: number;
+  status: string;
+  healthy: boolean;
+}
+
+export interface DaprComponent {
+  name: string;
+  type: string;
+  version: string;
+}
+
+export interface DaprStatus {
+  timestamp: string;
+  sidecars: DaprSidecar[];
+  components: DaprComponent[];
+  healthy: number;
+  unhealthy: number;
+}
+
+export interface DockerService {
+  name: string;
+  image: string;
+  status: string;
+}
+
+export interface DockerImage {
+  name: string;
+  type: string;
+}
+
+export interface DockerStatus {
+  timestamp: string;
+  mode: string;
+  services: DockerService[];
+  images: DockerImage[];
+  dapr: {
+    enabled: boolean;
+    version: string;
+    sidecars: number;
+  };
+  message: string;
+}
+
+export interface KubernetesDeployment {
+  name: string;
+  ready: string;
+  status: string;
+}
+
+export interface KubernetesSecrets {
+  total: number;
+  configured: string[];
+  missing: string[];
+  status: string;
+  message?: string;
+  expected?: string[];
+}
+
+export interface KubernetesStatus {
+  timestamp: string;
+  mode: string;
+  cluster: string;
+  deployments: KubernetesDeployment[];
+  services: any[];
+  secrets: KubernetesSecrets;
+  message: string;
+  error?: string;
+}
+
+export interface CICDPipeline {
+  name: string;
+  type: string;
+  status: string;
+  file?: string;
+}
+
+export interface CICDStatus {
+  timestamp: string;
+  pipelines: CICDPipeline[];
+  status: string;
+  message: string;
+}
+
+export interface MonitoringOverview {
+  timestamp: string;
+  kafka: KafkaStatus;
+  dapr: DaprStatus;
+  kubernetes: KubernetesStatus;
+  cicd: CICDStatus;
+  overall_health: 'healthy' | 'degraded' | 'unhealthy';
+}
+
+export const monitoringApi = {
+  getKafkaStatus: async (): Promise<KafkaStatus> => {
+    const client = getApiClient();
+    return (await client.get('/monitoring/kafka')).data;
+  },
+
+  getDaprStatus: async (): Promise<DaprStatus> => {
+    const client = getApiClient();
+    return (await client.get('/monitoring/dapr')).data;
+  },
+
+  getDockerStatus: async (): Promise<DockerStatus> => {
+    const client = getApiClient();
+    return (await client.get('/monitoring/docker')).data;
+  },
+
+  getKubernetesStatus: async (): Promise<KubernetesStatus> => {
+    const client = getApiClient();
+    return (await client.get('/monitoring/kubernetes')).data;
+  },
+
+  getCICDStatus: async (): Promise<CICDStatus> => {
+    const client = getApiClient();
+    return (await client.get('/monitoring/cicd')).data;
+  },
+
+  getOverview: async (): Promise<MonitoringOverview> => {
+    const client = getApiClient();
+    return (await client.get('/monitoring/overview')).data;
+  },
+};

@@ -76,6 +76,7 @@ class TaskService:
                 title=task_data.title.strip(),
                 description=task_data.description.strip() if task_data.description else None,
                 completed=False,
+                priority=task_data.priority if task_data.priority else "medium",
                 # Phase V fields
                 recurrence_pattern=task_data.recurrence_pattern,
                 recurrence_end_date=task_data.recurrence_end_date,
@@ -90,9 +91,10 @@ class TaskService:
 
             logger.info(f"Task created: {task.id} for user {user_id}")
 
-            # Phase V: Publish task.created event (T027)
+            # Phase V: Publish task.created event (T027) - fire and forget to avoid blocking
             if PHASE_V_ENABLED and settings.DAPR_ENABLED:
-                await self._publish_task_created_event(task)
+                import asyncio
+                asyncio.create_task(self._publish_task_created_event(task))
 
             return task, None
 
@@ -161,6 +163,15 @@ class TaskService:
                     changes["completed"] = {"old": task.completed, "new": task_data.completed}
                     task.completed = task_data.completed
 
+            # Handle priority updates
+            if task_data.priority is not None:
+                valid_priorities = ["low", "medium", "high"]
+                if task_data.priority.lower() not in valid_priorities:
+                    return None, f"Invalid priority. Must be one of: {', '.join(valid_priorities)}"
+                if task.priority != task_data.priority.lower():
+                    changes["priority"] = {"old": task.priority, "new": task_data.priority.lower()}
+                    task.priority = task_data.priority.lower()
+
             # Phase V: Handle recurrence pattern updates
             if PHASE_V_ENABLED and task_data.recurrence_pattern is not None:
                 if task_data.recurrence_pattern:
@@ -195,9 +206,10 @@ class TaskService:
 
             logger.info(f"Task updated: {task.id}")
 
-            # Phase V: Publish task.updated event if there were changes (T028)
+            # Phase V: Publish task.updated event if there were changes (T028) - fire and forget
             if PHASE_V_ENABLED and settings.DAPR_ENABLED and changes:
-                await self._publish_task_updated_event(task, changes)
+                import asyncio
+                asyncio.create_task(self._publish_task_updated_event(task, changes))
 
             return task, None
 
@@ -217,9 +229,10 @@ class TaskService:
             if not task:
                 return False, "Task not found or you don't have permission to delete it"
 
-            # Phase V: Publish task.deleted event BEFORE deletion (T029)
+            # Phase V: Publish task.deleted event BEFORE deletion (T029) - fire and forget
             if PHASE_V_ENABLED and settings.DAPR_ENABLED:
-                await self._publish_task_deleted_event(task)
+                import asyncio
+                asyncio.create_task(self._publish_task_deleted_event(task))
 
             await self.session.delete(task)
             await self.session.commit()
@@ -253,9 +266,10 @@ class TaskService:
 
             logger.info(f"Task completion toggled: {task.id} -> {task.completed}")
 
-            # Phase V: Publish task.completed event if task was just completed
+            # Phase V: Publish task.completed event if task was just completed - fire and forget
             if PHASE_V_ENABLED and settings.DAPR_ENABLED and not old_completed and task.completed:
-                await self._publish_task_completed_event(task)
+                import asyncio
+                asyncio.create_task(self._publish_task_completed_event(task))
 
             return task, None
 
@@ -274,16 +288,26 @@ class TaskService:
             task: Created task object
         """
         try:
+            import asyncio
             publisher = get_publisher()
-            success = publisher.publish_task_created(
+
+            # Use async version to avoid blocking
+            payload = {
+                "title": task.title,
+                "description": task.description,
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "recurrence_pattern": task.recurrence_pattern,
+                "reminder_offset": task.reminder_offset
+            }
+
+            success = await publisher.publish_event_async(
+                topic="taskflow.tasks.created",
+                event_type="task.created",
                 task_id=task.id,
                 user_id=task.user_id,
-                title=task.title,
-                description=task.description,
-                due_date=task.due_date.isoformat() if task.due_date else None,
-                recurrence_pattern=task.recurrence_pattern,
-                reminder_offset=task.reminder_offset
+                payload=payload
             )
+
             if success:
                 logger.info(f"Published task.created event for task {task.id}")
             else:
@@ -301,11 +325,16 @@ class TaskService:
         """
         try:
             publisher = get_publisher()
-            success = publisher.publish_task_updated(
+            payload = {"changes": changes}
+
+            success = await publisher.publish_event_async(
+                topic="taskflow.tasks.updated",
+                event_type="task.updated",
                 task_id=task.id,
                 user_id=task.user_id,
-                changes=changes
+                payload=payload
             )
+
             if success:
                 logger.info(f"Published task.updated event for task {task.id}")
             else:
@@ -322,10 +351,15 @@ class TaskService:
         """
         try:
             publisher = get_publisher()
-            success = publisher.publish_task_deleted(
+
+            success = await publisher.publish_event_async(
+                topic="taskflow.tasks.deleted",
+                event_type="task.deleted",
                 task_id=task.id,
-                user_id=task.user_id
+                user_id=task.user_id,
+                payload={}
             )
+
             if success:
                 logger.info(f"Published task.deleted event for task {task.id}")
             else:
@@ -342,11 +376,16 @@ class TaskService:
         """
         try:
             publisher = get_publisher()
-            success = publisher.publish_task_completed(
+            payload = {"completed_at": task.updated_at.isoformat()}
+
+            success = await publisher.publish_event_async(
+                topic="taskflow.tasks.completed",
+                event_type="task.completed",
                 task_id=task.id,
                 user_id=task.user_id,
-                completed_at=task.updated_at.isoformat()
+                payload=payload
             )
+
             if success:
                 logger.info(f"Published task.completed event for task {task.id}")
             else:

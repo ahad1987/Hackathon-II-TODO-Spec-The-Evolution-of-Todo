@@ -23,8 +23,10 @@ def get_publisher():
     if _publisher is None:
         try:
             from .publisher import DaprEventPublisher
-            _publisher = DaprEventPublisher()
-            logger.info("Dapr publisher initialized successfully")
+            from src.config import get_settings
+            settings = get_settings()
+            _publisher = DaprEventPublisher(pubsub_name=settings.PUBSUB_NAME)
+            logger.info(f"Dapr publisher initialized successfully with {settings.PUBSUB_NAME}")
         except ImportError as e:
             logger.warning(f"Dapr SDK not available: {e}")
             logger.info("Using mock publisher (events will not be published)")

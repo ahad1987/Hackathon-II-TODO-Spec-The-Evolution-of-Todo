@@ -1,0 +1,176 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "34"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"chat-api","phase":"phase-v"},"name":"chat-api","namespace":"default"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"chat-api"}},"template":{"metadata":{"annotations":{"dapr.io/app-id":"chat-api","dapr.io/app-port":"8000","dapr.io/app-protocol":"http","dapr.io/enable-metrics":"true","dapr.io/enabled":"true","dapr.io/log-level":"info","dapr.io/metrics-port":"9090","dapr.io/sidecar-cpu-limit":"500m","dapr.io/sidecar-cpu-request":"100m","dapr.io/sidecar-memory-limit":"512Mi","dapr.io/sidecar-memory-request":"256Mi"},"labels":{"app":"chat-api"}},"spec":{"containers":[{"env":[{"name":"API_TITLE","valueFrom":{"configMapKeyRef":{"key":"API_TITLE","name":"chat-api-config"}}},{"name":"API_VERSION","valueFrom":{"configMapKeyRef":{"key":"API_VERSION","name":"chat-api-config"}}},{"name":"ENVIRONMENT","valueFrom":{"configMapKeyRef":{"key":"ENVIRONMENT","name":"chat-api-config"}}},{"name":"DEBUG","valueFrom":{"configMapKeyRef":{"key":"DEBUG","name":"chat-api-config"}}},{"name":"DAPR_ENABLED","valueFrom":{"configMapKeyRef":{"key":"DAPR_ENABLED","name":"chat-api-config"}}},{"name":"DAPR_HTTP_PORT","valueFrom":{"configMapKeyRef":{"key":"DAPR_HTTP_PORT","name":"chat-api-config"}}},{"name":"DAPR_GRPC_PORT","valueFrom":{"configMapKeyRef":{"key":"DAPR_GRPC_PORT","name":"chat-api-config"}}},{"name":"PUBSUB_NAME","valueFrom":{"configMapKeyRef":{"key":"PUBSUB_NAME","name":"chat-api-config"}}},{"name":"CORS_ORIGINS","valueFrom":{"configMapKeyRef":{"key":"CORS_ORIGINS","name":"chat-api-config"}}},{"name":"BETTER_AUTH_SECRET","valueFrom":{"secretKeyRef":{"key":"BETTER_AUTH_SECRET","name":"chat-api-secrets"}}},{"name":"DATABASE_URL","valueFrom":{"secretKeyRef":{"key":"DATABASE_URL","name":"chat-api-secrets"}}}],"image":"phase-ii-backend:latest","imagePullPolicy":"IfNotPresent","livenessProbe":{"failureThreshold":3,"httpGet":{"path":"/health/live","port":8000,"scheme":"HTTP"},"initialDelaySeconds":10,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":5},"name":"chat-api","ports":[{"containerPort":8000,"name":"http","protocol":"TCP"}],"readinessProbe":{"failureThreshold":3,"httpGet":{"path":"/health/live","port":8000,"scheme":"HTTP"},"initialDelaySeconds":15,"periodSeconds":5,"successThreshold":1,"timeoutSeconds":5},"resources":{"limits":{"cpu":"1000m","memory":"512Mi"},"requests":{"cpu":"200m","memory":"256Mi"}},"startupProbe":{"failureThreshold":12,"httpGet":{"path":"/health/live","port":8000,"scheme":"HTTP"},"initialDelaySeconds":0,"periodSeconds":5,"successThreshold":1,"timeoutSeconds":5}}]}}}}
+  creationTimestamp: "2026-02-01T19:33:56Z"
+  generation: 34
+  labels:
+    app: chat-api
+    phase: phase-v
+  name: chat-api
+  namespace: default
+  resourceVersion: "110110"
+  uid: 59ea5b46-aacd-4250-b8c6-ef880da2c2db
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: chat-api
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        dapr.io/app-id: chat-api
+        dapr.io/app-port: "8000"
+        dapr.io/app-protocol: http
+        dapr.io/enable-metrics: "true"
+        dapr.io/enabled: "true"
+        dapr.io/log-level: info
+        dapr.io/metrics-port: "9090"
+        dapr.io/sidecar-cpu-limit: 500m
+        dapr.io/sidecar-cpu-request: 100m
+        dapr.io/sidecar-memory-limit: 512Mi
+        dapr.io/sidecar-memory-request: 256Mi
+        kubectl.kubernetes.io/restartedAt: "2026-02-03T02:56:12+05:00"
+      creationTimestamp: null
+      labels:
+        app: chat-api
+    spec:
+      containers:
+      - env:
+        - name: API_TITLE
+          valueFrom:
+            configMapKeyRef:
+              key: API_TITLE
+              name: chat-api-config
+        - name: API_VERSION
+          valueFrom:
+            configMapKeyRef:
+              key: API_VERSION
+              name: chat-api-config
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              key: ENVIRONMENT
+              name: chat-api-config
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              key: DEBUG
+              name: chat-api-config
+        - name: DAPR_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              key: DAPR_ENABLED
+              name: chat-api-config
+        - name: DAPR_HTTP_PORT
+          valueFrom:
+            configMapKeyRef:
+              key: DAPR_HTTP_PORT
+              name: chat-api-config
+        - name: DAPR_GRPC_PORT
+          valueFrom:
+            configMapKeyRef:
+              key: DAPR_GRPC_PORT
+              name: chat-api-config
+        - name: PUBSUB_NAME
+          valueFrom:
+            configMapKeyRef:
+              key: PUBSUB_NAME
+              name: chat-api-config
+        - name: CORS_ORIGINS
+          value: http://127.0.0.1:3000,http://localhost:3000
+        - name: BETTER_AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: BETTER_AUTH_SECRET
+              name: chat-api-secrets
+        - name: DATABASE_URL
+          value: postgresql://postgres:postgres123@postgres.default.svc.cluster.local:5432/taskflow
+        - name: CICD_CONFIGURED
+          value: "true"
+        - name: CICD_PROVIDER
+          value: github-actions
+        - name: COOKIE_SECURE
+          value: "false"
+        - name: COOKIE_SAMESITE
+          value: none
+        - name: COOKIE_DOMAIN
+        image: phase-ii-backend:v7
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/live
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: chat-api
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/live
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: "1"
+            memory: 512Mi
+          requests:
+            cpu: 200m
+            memory: 256Mi
+        startupProbe:
+          failureThreshold: 12
+          httpGet:
+            path: /health/live
+            port: 8000
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 5
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2026-02-02T21:56:02Z"
+    lastUpdateTime: "2026-02-02T21:56:02Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2026-02-01T19:33:56Z"
+    lastUpdateTime: "2026-02-02T21:56:49Z"
+    message: ReplicaSet "chat-api-6c7fb69fb7" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 34
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1

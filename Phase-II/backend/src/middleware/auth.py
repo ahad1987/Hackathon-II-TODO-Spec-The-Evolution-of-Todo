@@ -20,13 +20,25 @@ settings = get_settings()
 # List of paths that don't require authentication
 UNPROTECTED_PATHS = {
     "/health",
+    "/health/live",
+    "/health/ready",
     "/docs",
     "/redoc",
     "/openapi.json",
     "/api/v1/auth/signup",
     "/api/v1/auth/login",
     "/api/v1/auth/refresh",
+    "/api/v1/monitoring/kafka",
+    "/api/v1/monitoring/dapr",
+    "/api/v1/monitoring/docker",
+    "/api/v1/monitoring/kubernetes",
+    "/api/v1/monitoring/cicd",
+    "/api/v1/monitoring/overview",
+    "/dapr/subscribe",
+    "/dapr/config",
     "/",
+    "/todos",  # DEV MODE: Allow todos access without auth
+    "/api/v1/todos",  # DEV MODE: Allow todos access without auth
 }
 
 

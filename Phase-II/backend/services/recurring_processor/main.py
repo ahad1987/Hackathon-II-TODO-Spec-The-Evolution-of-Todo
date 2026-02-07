@@ -243,19 +243,6 @@ async def root():
     }
 
 
-from fastapi import FastAPI
-import uvicorn
-
-app = FastAPI()
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-@app.get("/health/live")
-def live():
-    return {"status": "alive"}
-
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
