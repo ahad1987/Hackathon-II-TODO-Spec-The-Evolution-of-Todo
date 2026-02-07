@@ -20,6 +20,8 @@ settings = get_settings()
 # List of paths that don't require authentication
 UNPROTECTED_PATHS = {
     "/health",
+    "/health/live",
+    "/health/ready",
     "/docs",
     "/redoc",
     "/openapi.json",
