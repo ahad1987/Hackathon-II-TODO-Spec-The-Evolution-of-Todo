@@ -80,12 +80,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: Phase-II/frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: Phase-II/frontend
-        run: npm ci
+        run: npm install
 
       - name: Lint
         working-directory: Phase-II/frontend
@@ -104,6 +102,7 @@ jobs:
     name: "Build - ${{ matrix.service.name }}"
     runs-on: ubuntu-latest
     needs: [backend-lint-test, frontend-lint-test]
+    if: always() && !cancelled()
 
     strategy:
       fail-fast: false
