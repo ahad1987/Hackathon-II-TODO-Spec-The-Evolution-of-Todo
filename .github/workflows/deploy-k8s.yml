@@ -1,0 +1,354 @@
+name: "Deploy to Kubernetes (Manual)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - minikube
+          - staging
+          - production
+      image_tag:
+        description: "Image tag to deploy (e.g. main-a1b2c3d, latest, v1.0.0)"
+        required: true
+        default: "latest"
+      dry_run:
+        description: "Dry run (diff only, no apply)"
+        required: false
+        type: boolean
+        default: true
+      namespace:
+        description: "Kubernetes namespace (leave empty for auto)"
+        required: false
+        default: ""
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
+
+jobs:
+  # ══════════════════════════════════════════════
+  # PRE-FLIGHT: Validate inputs and images
+  # ══════════════════════════════════════════════
+  preflight:
+    name: "Pre-flight Checks"
+    runs-on: ubuntu-latest
+    outputs:
+      namespace: ${{ steps.resolve.outputs.namespace }}
+      image_prefix: ${{ steps.resolve.outputs.image_prefix }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve namespace and image prefix
+        id: resolve
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          NS="${{ github.event.inputs.namespace }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+
+          # Auto-resolve namespace
+          if [[ -z "$NS" ]]; then
+            if [[ "$ENV" == "minikube" ]]; then
+              NS="default"
+            else
+              NS="taskflow-${ENV}"
+            fi
+          fi
+
+          IMAGE_PREFIX="${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}"
+
+          echo "namespace=${NS}" >> $GITHUB_OUTPUT
+          echo "image_prefix=${IMAGE_PREFIX}" >> $GITHUB_OUTPUT
+
+          echo "### Pre-flight Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${ENV} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Namespace | ${NS} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Tag | ${TAG} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dry Run | ${{ github.event.inputs.dry_run }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Prefix | ${IMAGE_PREFIX} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Validate manifests exist
+        run: |
+          echo "Checking required manifest files..."
+          REQUIRED_FILES=(
+            "Phase-II/k8s/infrastructure/postgres-deployment.yaml"
+            "Phase-II/k8s/infrastructure/redis-deployment.yaml"
+            "Phase-II/k8s/infrastructure/kafka-deployment.yaml"
+            "Phase-II/k8s/dapr/pubsub.yaml"
+            "Phase-II/Phase-II/k8s/services/chat-api-deployment.yaml"
+            "Phase-II/Phase-II/k8s/services/frontend-deployment.yaml"
+            "Phase-II/Phase-II/k8s/services/phase-v/audit-logger-deployment.yaml"
+            "Phase-II/Phase-II/k8s/services/phase-v/notification-service-deployment.yaml"
+            "Phase-II/Phase-II/k8s/services/phase-v/recurring-processor-deployment.yaml"
+            "Phase-II/Phase-II/k8s/services/phase-v/reminder-service-deployment.yaml"
+          )
+
+          MISSING=0
+          for f in "${REQUIRED_FILES[@]}"; do
+            if [[ -f "$f" ]]; then
+              echo "  [OK] $f"
+            else
+              echo "  [MISSING] $f"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          if [[ $MISSING -gt 0 ]]; then
+            echo "::error::${MISSING} required manifest files are missing"
+            exit 1
+          fi
+
+          echo "All manifest files present."
+
+  # ══════════════════════════════════════════════
+  # DEPLOY: Apply manifests to Kubernetes
+  # ══════════════════════════════════════════════
+  deploy:
+    name: "Deploy to ${{ github.event.inputs.environment }}"
+    runs-on: ubuntu-latest
+    needs: [preflight]
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.28.0"
+
+      - name: Configure kubectl
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+
+          if [[ "$ENV" == "minikube" ]]; then
+            echo "::notice::Minikube deployment - skipping kubectl config (requires local execution)"
+            echo "For Minikube, run this workflow locally or use the deploy script."
+            echo ""
+            echo "Local deployment commands:"
+            echo "  eval \$(minikube docker-env)"
+            echo "  docker build -t phase-ii-backend:latest ./backend"
+            echo "  kubectl apply -f Phase-II/k8s/infrastructure/"
+            echo "  kubectl apply -f Phase-II/k8s/dapr/"
+            echo "  kubectl apply -f Phase-II/k8s/services/"
+            echo "  kubectl apply -f Phase-II/k8s/services/phase-v/"
+            exit 0
+          fi
+
+          # Cloud environments use KUBE_CONFIG secret
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+
+          if [[ -n "${{ secrets.KUBE_CONTEXT }}" ]]; then
+            kubectl config use-context "${{ secrets.KUBE_CONTEXT }}"
+          fi
+
+          kubectl cluster-info
+          echo "Connected to cluster successfully."
+
+      - name: Create namespace (if needed)
+        if: github.event.inputs.environment != 'minikube'
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+          kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
+          echo "Namespace ${NS} ready."
+
+      - name: Deploy infrastructure
+        if: github.event.inputs.environment != 'minikube'
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+          DRY="${{ github.event.inputs.dry_run }}"
+
+          if [[ "$DRY" == "true" ]]; then
+            echo "=== DRY RUN: Infrastructure diff ==="
+            kubectl diff -f Phase-II/k8s/infrastructure/ -n "${NS}" || true
+          else
+            kubectl apply -f Phase-II/k8s/infrastructure/ -n "${NS}"
+            echo "Infrastructure deployed."
+          fi
+
+      - name: Deploy Dapr components
+        if: github.event.inputs.environment != 'minikube'
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+          DRY="${{ github.event.inputs.dry_run }}"
+
+          if [[ "$DRY" == "true" ]]; then
+            echo "=== DRY RUN: Dapr components diff ==="
+            kubectl diff -f Phase-II/k8s/dapr/ -n "${NS}" || true
+          else
+            kubectl apply -f Phase-II/k8s/dapr/ -n "${NS}"
+            echo "Dapr components deployed."
+          fi
+
+      - name: Wait for infrastructure
+        if: github.event.inputs.environment != 'minikube' && github.event.inputs.dry_run == 'false'
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+          echo "Waiting for infrastructure pods..."
+          kubectl wait --for=condition=ready pod -l app=postgres -n "${NS}" --timeout=300s || true
+          kubectl wait --for=condition=ready pod -l app=redis -n "${NS}" --timeout=300s || true
+          echo "Infrastructure ready."
+
+      - name: Update image tags in manifests
+        if: github.event.inputs.environment != 'minikube'
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          PREFIX="${{ needs.preflight.outputs.image_prefix }}"
+
+          echo "Updating image tags to: ${TAG}"
+
+          # Chat API (backend)
+          sed -i "s|image: .*backend:.*|image: ${PREFIX}/phase-ii-backend:${TAG}|g" \
+            Phase-II/k8s/services/chat-api-deployment.yaml
+
+          # Frontend
+          sed -i "s|image: .*frontend:.*|image: ${PREFIX}/phase-ii-frontend:${TAG}|g" \
+            Phase-II/k8s/services/frontend-deployment.yaml
+
+          # Phase V services
+          sed -i "s|image: .*recurring-processor:.*|image: ${PREFIX}/phase-ii-recurring-processor:${TAG}|g" \
+            Phase-II/k8s/services/phase-v/recurring-processor-deployment.yaml
+
+          sed -i "s|image: .*reminder-service:.*|image: ${PREFIX}/phase-ii-reminder-service:${TAG}|g" \
+            Phase-II/k8s/services/phase-v/reminder-service-deployment.yaml
+
+          sed -i "s|image: .*notification-service:.*|image: ${PREFIX}/phase-ii-notification-service:${TAG}|g" \
+            Phase-II/k8s/services/phase-v/notification-service-deployment.yaml
+
+          sed -i "s|image: .*audit-logger:.*|image: ${PREFIX}/phase-ii-audit-logger:${TAG}|g" \
+            Phase-II/k8s/services/phase-v/audit-logger-deployment.yaml
+
+          echo "Image tags updated."
+
+      - name: Deploy application services
+        if: github.event.inputs.environment != 'minikube'
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+          DRY="${{ github.event.inputs.dry_run }}"
+
+          if [[ "$DRY" == "true" ]]; then
+            echo "=== DRY RUN: Services diff ==="
+            kubectl diff -f Phase-II/k8s/services/chat-api-deployment.yaml -n "${NS}" || true
+            kubectl diff -f Phase-II/k8s/services/frontend-deployment.yaml -n "${NS}" || true
+            kubectl diff -f Phase-II/k8s/services/phase-v/ -n "${NS}" || true
+          else
+            # Core services
+            kubectl apply -f Phase-II/k8s/services/chat-api-deployment.yaml -n "${NS}"
+            kubectl apply -f Phase-II/k8s/services/frontend-deployment.yaml -n "${NS}"
+
+            # Phase V subscriber services
+            kubectl apply -f Phase-II/k8s/services/phase-v/ -n "${NS}"
+
+            echo "All services deployed."
+          fi
+
+      - name: Wait for rollouts
+        if: github.event.inputs.environment != 'minikube' && github.event.inputs.dry_run == 'false'
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+          echo "Waiting for deployment rollouts..."
+
+          kubectl rollout status deployment/chat-api -n "${NS}" --timeout=300s
+          kubectl rollout status deployment/frontend -n "${NS}" --timeout=300s
+          kubectl rollout status deployment/recurring-processor -n "${NS}" --timeout=300s
+          kubectl rollout status deployment/reminder-service -n "${NS}" --timeout=300s
+          kubectl rollout status deployment/notification-service -n "${NS}" --timeout=300s
+          kubectl rollout status deployment/audit-logger -n "${NS}" --timeout=300s
+
+          echo "All deployments rolled out successfully."
+
+      - name: Health check
+        if: github.event.inputs.environment != 'minikube' && github.event.inputs.dry_run == 'false'
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+
+          # Get backend service IP
+          BACKEND_IP=$(kubectl get svc chat-api -n "${NS}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+
+          if [[ -z "$BACKEND_IP" ]]; then
+            BACKEND_IP=$(kubectl get svc chat-api -n "${NS}" -o jsonpath='{.spec.clusterIP}')
+            echo "Using ClusterIP: ${BACKEND_IP} (no LoadBalancer)"
+          fi
+
+          echo "Waiting 30s for services to stabilize..."
+          sleep 30
+
+          echo "Running health checks..."
+          curl -sf "http://${BACKEND_IP}:8000/health/live" || echo "::warning::Liveness check failed"
+          curl -sf "http://${BACKEND_IP}:8000/api/v1/monitoring/overview" || echo "::warning::Monitoring check failed"
+
+          echo "Health checks complete."
+
+      - name: Deployment summary
+        if: github.event.inputs.environment != 'minikube'
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          DRY="${{ github.event.inputs.dry_run }}"
+
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$DRY" == "true" ]]; then
+            echo "> **DRY RUN** — No changes applied" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "> **DEPLOYED** to ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ github.event.inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Namespace | ${NS} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Tag | ${TAG} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dry Run | ${DRY} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Deployments:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          kubectl get deployments -n "${NS}" -o wide 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "N/A" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  # ══════════════════════════════════════════════
+  # ROLLBACK: Auto-rollback on deploy failure
+  # ══════════════════════════════════════════════
+  rollback:
+    name: "Rollback on Failure"
+    runs-on: ubuntu-latest
+    needs: [preflight, deploy]
+    if: failure() && github.event.inputs.environment != 'minikube' && github.event.inputs.dry_run == 'false'
+
+    steps:
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Rollback all deployments
+        run: |
+          NS="${{ needs.preflight.outputs.namespace }}"
+          echo "::error::Deployment failed — initiating rollback"
+
+          DEPLOYMENTS=(chat-api frontend recurring-processor reminder-service notification-service audit-logger)
+          for dep in "${DEPLOYMENTS[@]}"; do
+            echo "Rolling back ${dep}..."
+            kubectl rollout undo deployment/${dep} -n "${NS}" 2>/dev/null || echo "Skipped ${dep} (not found)"
+          done
+
+          echo "Rollback complete."
+
+      - name: Rollback summary
+        run: |
+          echo "### ROLLBACK EXECUTED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment to **${{ github.event.inputs.environment }}** failed." >> $GITHUB_STEP_SUMMARY
+          echo "All deployments rolled back to previous revision." >> $GITHUB_STEP_SUMMARY
